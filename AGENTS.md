@@ -7,24 +7,30 @@
 >
 > Commits you push to the connected branch sync back to Lovable and show up in
 > the editor, so keep the branch in a working state.
-
-## What Lovable manages
-
-Rules outside this block are the project's own. Change the pieces below in
-Lovable, not by hand. With the [Lovable MCP](https://mcp.lovable.dev)
-connected, `send_message` asks Lovable to do it; otherwise ask the user to
-use the editor.
-
-- **Database.** Do not add or edit `supabase/migrations/` or `drizzle/`.
-  Ask Lovable to change the schema.
-- **Generated files.** Do not edit a file whose header says it is automatically
-  generated.
-- **AI gateway.** Keep model calls on Lovable's gateway, and keep
-  `LOVABLE_API_KEY` out of browser code.
-- **Connectors.** Lovable provides native connectors. `list_connectors` shows
-  which are enabled; `add_connector` only returns the dashboard link. When a
-  connector is enabled, calls go through the connector gateway and need
-  `LOVABLE_API_KEY`. When Lovable does not provide one, users can bring their
-  own key and store it in Secrets.
-- **Secrets.** Lovable manages them. Do not put secret values in the repo.
 <!-- LOVABLE:END -->
+
+- Schema changes go through the Lovable migration tool (journal: drizzle/migrations); the read-only SQL runner rejects DDL - one apply path, no half-applied backend.
+- Academic calendar (terms vs semesters, dates, auto lifecycle) lives in tenant_settings.features.__academic_calendar via src/lib/academic-calendar.ts; every date/term field uses PeriodDateInput/PeriodSelect (src/components/portal/PeriodFields.tsx) and every dated server write calls assertPeriodOpen — one central calendar, no per-module date logic.
+- Financial list items never store their own dates/lifecycle: they carry a coverage scope (+ optional period) resolved by resolveCoverage in src/lib/academic-calendar.ts; each Financial Configuration area renders all its sections on one page — keeps the calendar the only lifecycle source.
+- Appointment letters derive from saved profiles/offer rows via a shared authenticated read and preview (school, signer, employment type picked when ambiguous) and print from an isolated same-origin frame — no fabricated details, no portal chrome on paper.
+- Configuration is split into six domains registered in src/lib/config-domains.ts; each operational module is governed by exactly one domain (enforced by src/test/config-domains.test.ts) and reads settings from it, so no module keeps its own configuration logic.
+- Grading bands and assessment/attendance/timetable/report-card rules live in tenant_settings.features.__academic_rules via src/lib/academic-rules.ts, edited only in Academic Configuration; every rule has a default and may be deleted (deleted = not applied) — modules and server guards read them, never their own copies.
+- People rules (staff lifecycle incl. appointment-letter terms, employment types, student lifecycle, guardian relationships, identity) live in tenant_settings.features.__people_rules via src/lib/people-rules.ts, versioned with an optimistic check on save; positions/departments/schedule types are edited only in People Configuration — one source, no per-module copies.
+- Versioned settings in tenant_settings.features (academic calendar, academic rules, people rules) are saved only through writeVersionedFeature in src/lib/config.functions.ts — stale copies are rejected and other domains' keys are preserved, preventing lost updates.
+- Operations rules (admissions process, library policies, messaging channels) live in tenant_settings.features.__operations_rules via src/lib/operations-rules.ts, saved through writeVersionedFeature; admission numbering is edited only in Operations Configuration and employee numbering + school code only in System Configuration, each save writing only its own numbering_settings columns — one owner per setting.
+- Configuration list/rule editors are shared from src/components/portal/RuleEditors.tsx — no per-domain copies.
+- Currency is owned only by Financial Configuration (currency section); schools.currency is just the starting value set at provisioning, and every amount on screen is formatted through useFinanceConfig().money — no hardcoded currency formatters.
+- Versioned configuration areas in src/lib/finance-config.ts carry an owner page (areasOwnedBy); Financial and Reporting & Records render the same workspace filtered by owner — one storage, lifecycle and audit path, no duplicate editors.
+- Assessment types (name + class/exam category) live in the academic rules and are edited only in Academic Configuration; Assessment validates against them and Termly Reports weights by category — no hardcoded type lists.
+- Teacher scope comes only from teaching_assignments via loadTeachingScope (src/lib/teaching.server.ts, distinct from class_teachers); pairs are level-matched by src/lib/teaching-levels.ts, enforced in syncTeachingAssignments — a subject is taught only in classes of its own level.
+- Branding (name, tagline, motto, year, colours, logo) is read only via get_public_branding_full() (src/lib/branding.*, useSchoolName); the logo renders only through SchoolLogo/LogoWatermark/UserAvatar in src/components/branding (generated crest when none uploaded; default avatar) and is stored as a resized data URL because public storage is blocked — one logo path everywhere.
+
+- Subdirectories have their own AGENTS.md (src/lib) — read it before changing files there.
+- Assessment uses selected, paged authenticated reads and existing per-record saves; assessment.ts supplies the same weighted totals to assessment and termly reports, preventing divergent grading.
+- Printable documents use printDocument in an isolated same-origin frame so portal controls never appear on paper.
+- All CSV building and downloading goes through src/lib/csv.ts (csvCell/toCsv/recordsToCsv/downloadCsv/downloadRecordsCsv) — formula-injection safe, BOM-prefixed, delayed URL revoke; no module-local CSV helpers.
+- The 12 imported modules (assignments, exams, results, lessons, timetable, library, publicity, fees-invoicing, invoices, messaging, performance tracker, students) follow the same rules as core modules: calendars via loadCalendar, currency via useFinanceConfig().money, printing via printDocument, CSV via src/lib/csv.ts — never reintroduce archive-era helpers (cedis, system_settings reads, window.print).
+- Publicity landing data is fetched by getPublicLandingData with an anonymous publishable client (same pattern as getPublicBranding); publicity tables allow anon reads of published rows only — never widen anon grants beyond those five tables.
+- Operations rules include a publicity section (notice retention, banner slides); new sections must be added with a schema .default([]) so older saved payloads still parse.
+- Tenant feature saves use configuration-writes.ts and the invoker RPCs write_school_configuration/write_school_module_policy; school-row locks serialize first writes and domain merging so concurrent saves cannot overwrite unrelated rules.
+- Protected roles are read only through getRoles in admin.server.ts, never profiles.role; teaching scope preserves learner/guardian roles and fails closed on failed assignment reads.
