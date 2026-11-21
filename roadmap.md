@@ -14,3 +14,10 @@
 - [ ] Enforce tenant-safe configuration and connected record contracts through migrations where necessary.
 - [ ] Add regression coverage and run applicable tests and browser workflows.
 - [ ] Document evidence, migration status and remaining limitations.
+
+# Roadmap — Custom role and operation management
+
+- [ ] Extend existing role management with super-admin-only role, permission and assignment CRUD without replacing built-in controls.
+- [ ] Enforce custom operation policies on the server and mirror allowed module access in the portal.
+- [ ] Test protected roles, permission changes, assignment and deletion safeguards; verify the available browser flow.
+- [ ] Record any database activation or signed-in verification blocker without changing the existing environment settings.

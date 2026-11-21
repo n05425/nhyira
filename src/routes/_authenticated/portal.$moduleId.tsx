@@ -35,6 +35,7 @@ import { LibraryManagement } from "@/components/modules/LibraryManagement";
 import { MessagingManagement } from "@/components/modules/MessagingManagement";
 import { TimetableManagement } from "@/components/modules/TimetableManagement";
 import { PerformanceTrackerManagement } from "@/components/modules/PerformanceTrackerManagement";
+import { useRoleAccess } from "@/hooks/useRoleAccess";
 
 
 export const Route = createFileRoute("/_authenticated/portal/$moduleId")({
@@ -57,6 +58,7 @@ export const Route = createFileRoute("/_authenticated/portal/$moduleId")({
 function ModulePage() {
   const { moduleId } = useParams({ from: "/_authenticated/portal/$moduleId" });
   const { profile } = useSession();
+  const roleAccess = useRoleAccess();
   const school = useSchoolName();
   const mod = getModule(moduleId);
 
@@ -75,7 +77,9 @@ function ModulePage() {
     );
   }
 
-  if (!canAccess(profile.role, profile.access_level, mod.id)) {
+  if (roleAccess.isPending) return <Panel title="Checking access"><p className="text-sm text-muted-foreground">Loading account permissions…</p></Panel>;
+
+  if (!canAccess(profile.role, profile.access_level, mod.id) || !roleAccess.allows(mod.id)) {
     return (
       <Panel title="Access denied">
         <div className="flex items-start gap-3">

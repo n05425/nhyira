@@ -2,6 +2,8 @@ import { createContext, useContext, useEffect, useState, type ReactNode } from "
 import type { Session } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
 import type { AccessLevel, Role } from "@/lib/access";
+import { useServerFn } from "@tanstack/react-start";
+import { getMyPortalProfile } from "@/lib/role-governance.functions";
 
 export interface PortalProfile {
   id: string;
@@ -29,6 +31,7 @@ const SessionContext = createContext<SessionState>({
 });
 
 export function SessionProvider({ children }: { children: ReactNode }) {
+  const fetchProfile = useServerFn(getMyPortalProfile);
   const [session, setSession] = useState<Session | null>(null);
   const [profile, setProfile] = useState<PortalProfile | null>(null);
   const [loading, setLoading] = useState(true);
@@ -38,12 +41,12 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       setProfile(null);
       return;
     }
-    const { data } = await supabase
-      .from("profiles")
-      .select("id, full_name, email, role, access_level, status, force_password_change, avatar_url")
-      .eq("id", userId)
-      .maybeSingle();
-    setProfile((data as PortalProfile | null) ?? null);
+    try {
+      const data = await fetchProfile();
+      setProfile((data as PortalProfile | null) ?? null);
+    } catch {
+      setProfile(null);
+    }
   };
 
   useEffect(() => {

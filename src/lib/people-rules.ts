@@ -7,6 +7,7 @@
  * Browser-safe; read by People Configuration, the modules and servers.
  * ------------------------------------------------------------------ */
 import { z } from "zod";
+import { roleGovernanceSchema } from "@/lib/role-governance";
 
 export const PEOPLE_FEATURE_KEY = "__people_rules";
 
@@ -39,6 +40,7 @@ export const peopleRulesSchema = z
     studentLifecycle: z.array(ruleSchema).max(30),
     guardian: z.array(ruleSchema).max(30),
     identity: z.array(ruleSchema).max(30),
+    accessGovernance: roleGovernanceSchema.default({ roles: [], assignments: [] }),
   })
   .refine((r) => new Set(r.employmentTypes.map((t) => t.toLowerCase())).size === r.employmentTypes.length, {
     message: "Employment types must be unique",
@@ -79,6 +81,7 @@ export const DEFAULT_PEOPLE_RULES: Record<PeopleSection, PeopleRule[]> = {
 export function defaultPeopleRules(): PeopleRules {
   return {
     version: 0,
+    accessGovernance: { roles: [], assignments: [] },
     employmentTypes: [...DEFAULT_EMPLOYMENT_TYPES],
     guardianRelationships: [...DEFAULT_GUARDIAN_RELATIONSHIPS],
     staffLifecycle: DEFAULT_PEOPLE_RULES.staffLifecycle.map((r) => ({ ...r })),

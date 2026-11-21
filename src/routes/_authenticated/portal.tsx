@@ -15,6 +15,7 @@ import { ACCESS_LABEL, MODULE_CATEGORIES, ROLE_META, modulesFor } from "@/lib/ac
 import { getPortalOverview } from "@/lib/admin.functions";
 import { ForcePasswordChange } from "@/components/portal/ForcePasswordChange";
 import { useIdleLogout } from "@/hooks/useIdleLogout";
+import { useRoleAccess } from "@/hooks/useRoleAccess";
 
 export const Route = createFileRoute("/_authenticated/portal")({
   head: ({ match }) => ({
@@ -39,6 +40,7 @@ export const Route = createFileRoute("/_authenticated/portal")({
 
 function PortalLayout() {
   const { profile, loading, refresh } = useSession();
+  const roleAccess = useRoleAccess();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const schoolName = useSchoolName();
@@ -86,7 +88,7 @@ function PortalLayout() {
   }
 
   const meta = ROLE_META[profile.role];
-  const modules = modulesFor(profile.role, profile.access_level);
+  const modules = modulesFor(profile.role, profile.access_level).filter((m) => roleAccess.allows(m.id));
 
   return (
     <div className="min-h-screen bg-background">
@@ -109,7 +111,7 @@ function PortalLayout() {
             <div className="hidden text-right sm:block">
               <p className="text-sm font-medium">{profile.full_name || profile.email}</p>
               <p className="text-xs text-ink-muted">
-                {meta.label} · {ACCESS_LABEL[profile.access_level]}
+                {roleAccess.data?.customRoleName ?? meta.label} · {ACCESS_LABEL[profile.access_level]}
               </p>
             </div>
             <AvatarPicker />

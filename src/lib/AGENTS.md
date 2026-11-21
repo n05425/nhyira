@@ -4,3 +4,4 @@
 - Learner attendance/score summaries are computed only by src/lib/student-summary.ts, grouped by academic-calendar periods; long lists use the shared usePaged/Pager in src/components/portal/Paged.tsx.
 - The password policy lives only in src/lib/password-policy.ts (rules, zod schema, generator) and new-password fields use PasswordInput/PasswordStrength — client and server enforce the same rules.
 - Education-level scoping (class level, subjects per class, which priced finance items apply to a level and their per-level amount in metadata.levels) lives only in src/lib/education-levels.ts; UI filters and server writes both use it — one rule set.
+- Custom role definitions, operation overrides and assignments live separately from profiles in the versioned people settings; auth middleware uses server-function metadata to apply role-operations through role-access.server, conjunctively with existing guards, so custom roles cannot elevate built-in authority.

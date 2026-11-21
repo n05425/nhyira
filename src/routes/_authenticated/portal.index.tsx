@@ -10,6 +10,7 @@ import { useSession } from "@/hooks/useSession";
 import { Input } from "@/components/ui/input";
 import { ACCESS_LABEL, MODULE_CATEGORIES, ROLE_META, modulesFor } from "@/lib/access";
 import { getPortalOverview } from "@/lib/admin.functions";
+import { useRoleAccess } from "@/hooks/useRoleAccess";
 
 export const Route = createFileRoute("/_authenticated/portal/")({
   head: ({ match }) => ({ meta: [
@@ -34,6 +35,7 @@ const QUICK_ACTION_IDS = [
 
 function PortalHome() {
   const { profile } = useSession();
+  const roleAccess = useRoleAccess();
   const school = useSchoolName();
   const overviewFn = useServerFn(getPortalOverview);
   const { data: overview } = useQuery({
@@ -45,8 +47,8 @@ function PortalHome() {
   const [query, setQuery] = useState("");
 
   const available = useMemo(
-    () => (profile ? modulesFor(profile.role, profile.access_level) : []),
-    [profile],
+    () => (profile ? modulesFor(profile.role, profile.access_level).filter((m) => roleAccess.allows(m.id)) : []),
+    [profile, roleAccess.data],
   );
 
   if (!profile) return null;
@@ -82,7 +84,7 @@ function PortalHome() {
           </div>
         </div>
         <dl className="grid gap-px bg-border sm:grid-cols-3">
-          <Stat label="Role" value={meta.label} />
+          <Stat label="Role" value={roleAccess.data?.customRoleName ?? meta.label} />
           <Stat label="Access level" value={ACCESS_LABEL[profile.access_level]} />
           <Stat label="Available modules" value={String(available.length)} />
         </dl>

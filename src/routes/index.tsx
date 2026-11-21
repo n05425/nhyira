@@ -17,6 +17,7 @@ import { ACCESS_LABEL, ROLES, ROLE_META, type Role } from "@/lib/access";
 import { getSetupStatus, recordLogin, requestPasswordReset } from "@/lib/admin.functions";
 import { resolveStudentLogin } from "@/lib/admissions.functions";
 import { getPublicLandingData } from "@/lib/publicity.functions";
+import { getMyPortalProfile } from "@/lib/role-governance.functions";
 import { NOTICE_LABEL_META, isNoticeActive, filterActiveSlides } from "@/lib/publicity";
 
 
@@ -357,6 +358,7 @@ function AuthPanel({
   const raiseReset = useServerFn(requestPasswordReset);
   const stampLogin = useServerFn(recordLogin);
   const resolveStudent = useServerFn(resolveStudentLogin);
+  const fetchProfile = useServerFn(getMyPortalProfile);
 
   const signIn = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -391,11 +393,15 @@ function AuthPanel({
       toast.error(error?.message ?? "Sign in failed");
       return;
     }
-    const { data: profile } = await supabase
-      .from("profiles")
-      .select("role, status")
-      .eq("id", data.user.id)
-      .maybeSingle();
+    let profile: Awaited<ReturnType<typeof fetchProfile>> = null;
+    try {
+      profile = await fetchProfile();
+    } catch {
+      await supabase.auth.signOut();
+      setBusy(false);
+      toast.error("Could not verify account access. Please try again.");
+      return;
+    }
 
     if (!profile || profile.status !== "active") {
       await supabase.auth.signOut();

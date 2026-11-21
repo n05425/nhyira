@@ -55,6 +55,7 @@ import { SecuritySettingsPanel } from "./SecuritySettingsPanel";
 import { UserFormDialog, type AccountRow, type UserFormValues } from "./UserFormDialog";
 import { OfferLetterDialog, type LetterTarget } from "./OfferLetterDialog";
 import { eligibleForOffer } from "@/lib/offer-letter";
+import { RolePermissionManager } from "./RolePermissionManager";
 
 interface ResetRow {
   id: string;
@@ -339,8 +340,9 @@ export function UserManagement() {
 
   return (
     <Tabs defaultValue="users" className="space-y-6">
-      <TabsList>
+      <TabsList className="h-auto max-w-full flex-wrap">
         <TabsTrigger value="users">User management</TabsTrigger>
+        {isSuperAdmin && <TabsTrigger value="roles">Roles & permissions</TabsTrigger>}
         <TabsTrigger value="security">Security settings</TabsTrigger>
         <TabsTrigger value="audit">Audit logs</TabsTrigger>
       </TabsList>
@@ -607,6 +609,8 @@ export function UserManagement() {
         </section>
 
       </TabsContent>
+
+      {isSuperAdmin && <TabsContent value="roles"><RolePermissionManager /></TabsContent>}
 
       <TabsContent value="security">
         <SecuritySettingsPanel canEdit={isSuperAdmin} />
