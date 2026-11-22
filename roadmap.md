@@ -17,6 +17,12 @@
 
 # Roadmap — Custom role and operation management
 
+# Roadmap — Distinct module operations
+
+- [ ] Enforce separate View, Add, Edit, Delete and Export grants, including saved role updates and assignments.
+- [ ] Check record identity for mixed saves and enforce export permissions across module downloads.
+- [ ] Add regression tests and verify available flows; authenticated hosted checks remain blocked by the external sign-in setup.
+
 - [x] Extend existing role management with super-admin-only role, permission and assignment CRUD without replacing built-in controls.
 - [x] Enforce custom operation policies on the server and mirror allowed module access in the portal.
 - [x] Test protected roles, permission changes, assignment and deletion safeguards; verify signed-out protection and mobile entry page.
