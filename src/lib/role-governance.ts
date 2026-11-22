@@ -69,14 +69,16 @@ export function operationAllowed(
   if (!eligible.length) return false;
   const builtInAllowed = eligible.some((id) => {
     const override = governance.roles.find((r) => r.id === id);
-    return !override || override.grants.some((g) => g.resource === resource && g.action === action);
+    return !override || (override.grants.some((g) => g.resource === resource && g.action === action) &&
+      override.grants.some((g) => g.resource === resource && g.action === "read"));
   });
   if (!builtInAllowed) return false;
   const assignment = governance.assignments.find((a) => a.userId === userId);
   if (!assignment) return true;
   const custom = governance.roles.find((r) => r.id === assignment.roleId);
   return Boolean(custom && custom.status === "active" && roles.includes(custom.baseRole) &&
-    custom.grants.some((g) => g.resource === resource && g.action === action));
+    custom.grants.some((g) => g.resource === resource && g.action === action) &&
+    custom.grants.some((g) => g.resource === resource && g.action === "read"));
 }
 
 export function deleteManagedRole(governance: RoleGovernance, id: string): RoleGovernance {

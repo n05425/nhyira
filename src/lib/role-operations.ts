@@ -2,6 +2,8 @@ import type { AccessOperation } from "@/lib/role-governance";
 
 // Explicit server-controlled identity; callers cannot select their own permission target.
 export const SERVER_OPERATIONS: Record<string, { resource: string; actions: AccessOperation[] }> = {
+  "reports:getReportOptions": { resource: "termly-reports", actions: ["read"] },
+  "reports:getTermlyReport": { resource: "termly-reports", actions: ["read"] },
   "admin:listAccounts": { resource: "user-management", actions: ["read"] },
   "admin:createAccount": { resource: "user-management", actions: ["create"] },
   "admin:updateAccount": { resource: "user-management", actions: ["update"] },
@@ -188,7 +190,7 @@ export const SERVER_OPERATIONS: Record<string, { resource: string; actions: Acce
 };
 
 export function serverOperation(meta: { filename: string; name: string }, data: unknown) {
-  const stem = meta.filename.replace(/\\/g, "/").match(/([^/]+)\.functions\.[tj]sx?$/)?.[1];
+  const stem = meta.filename.split("?")[0]?.replace(/\\/g, "/").match(/([^/]+)\.functions\.[tj]sx?$/)?.[1];
   if (!stem) return null;
   const operation = SERVER_OPERATIONS[`${stem}:${meta.name}`];
   if (!operation) return null;

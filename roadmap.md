@@ -17,7 +17,8 @@
 
 # Roadmap — Custom role and operation management
 
-- [ ] Extend existing role management with super-admin-only role, permission and assignment CRUD without replacing built-in controls.
-- [ ] Enforce custom operation policies on the server and mirror allowed module access in the portal.
-- [ ] Test protected roles, permission changes, assignment and deletion safeguards; verify the available browser flow.
-- [ ] Record any database activation or signed-in verification blocker without changing the existing environment settings.
+- [x] Extend existing role management with super-admin-only role, permission and assignment CRUD without replacing built-in controls.
+- [x] Enforce custom operation policies on the server and mirror allowed module access in the portal.
+- [x] Test protected roles, permission changes, assignment and deletion safeguards; verify signed-out protection and mobile entry page.
+- [x] Preserve .env and use the existing versioned people-settings save; no schema migration or connection replacement.
+- [ ] Verify create/edit/assign/revoke/delete against the existing hosted database while signed in as Super Admin — blocked: no managed session or approved sign-in is available for this externally configured project. Public branding has a pre-existing hydration mismatch; its visible desktop/mobile rendering was checked.

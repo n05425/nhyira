@@ -45,6 +45,12 @@ describe("preserved authority and custom-role CRUD", () => {
     const governance = { roles: [{ ...defaultManagedRole("staff"), grants: [{ resource: "assessment", action: "read" as const }] }], assignments: [] };
     expect(operationAllowed(governance, userId, ["staff"], "standard", "assessment", "update")).toBe(false);
   });
+  it("revoking module view also blocks direct writes with a retained write grant", () => {
+    const governance: RoleGovernance = { ...assigned, roles: [{ ...custom, grants: [{ resource: "assessment", action: "update" }] }] };
+    expect(operationAllowed(governance, userId, ["staff"], "standard", "assessment", "update")).toBe(false);
+    governance.roles[0]?.grants.push({ resource: "assessment", action: "read" });
+    expect(operationAllowed(governance, userId, ["staff"], "standard", "assessment", "update")).toBe(true);
+  });
   it("deactivating a custom role revokes its assigned access", () => {
     expect(operationAllowed({ ...assigned, roles: [{ ...custom, status: "inactive" }] }, userId, ["staff"], "standard", "assessment", "read")).toBe(false);
   });
@@ -82,6 +88,10 @@ describe("preserved authority and custom-role CRUD", () => {
 });
 
 describe("server-side operation enforcement", () => {
+  it("applies report permissions even when function metadata carries an extraction suffix", () => {
+    expect(serverOperation({ filename: "src/lib/reports.functions.ts?tsr-split", name: "getTermlyReport" }, {}))
+      .toEqual({ resource: "termly-reports", actions: ["read"] });
+  });
   it("identifies reads, writes and deletion independently of caller input", () => {
     expect(serverOperation({ filename: "src/lib/assessment.functions.ts", name: "deleteAssessment" }, { resource: "dashboard", action: "read" })).toEqual({ resource: "assessment", actions: ["delete"] });
   });
