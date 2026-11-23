@@ -1,4 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
+import { z } from "zod";
+import { assertRoleOperations } from "@/lib/role-access.server";
+import { financePermissionResource } from "@/lib/role-operations";
 import { resolveProvisionedSchool } from "@/lib/school.server";
 import type { Json } from "@/integrations/supabase/types";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
@@ -45,7 +48,7 @@ async function audit(
 /** Everything the Financial Configuration module needs for one school. */
 export const getFinanceConfiguration = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((d: unknown) => schoolScope.partial().parse(d ?? {}))
+  .inputValidator((d: unknown) => schoolScope.partial().extend({ owner: z.enum(["financial-configuration", "reporting-configuration"]).default("financial-configuration") }).parse(d ?? {}))
   .handler(async ({ data, context }) => {
     const { supabase } = context;
     await assertAdmin(supabase, context.userId);
@@ -96,10 +99,10 @@ export const getFinanceConfiguration = createServerFn({ method: "POST" })
     return {
       schools: schools ?? [],
       schoolId,
-      sections: sections.data ?? [],
-      items: items.data ?? [],
-      rules: rules.data ?? [],
-      audit: auditRows.data ?? [],
+      sections: (sections.data ?? []).filter((r) => getSection(r.section_key)?.area.owner === data.owner || (!getSection(r.section_key)?.area.owner && data.owner === "financial-configuration")),
+      items: (items.data ?? []).filter((r) => (getSection(r.list_key)?.area.owner ?? "financial-configuration") === data.owner),
+      rules: (rules.data ?? []).filter((r) => (getSection(r.rule_key)?.area.owner ?? "financial-configuration") === data.owner),
+      audit: (auditRows.data ?? []).filter((r) => getSection(r.section_key) && (getSection(r.section_key)?.area.owner ?? "financial-configuration") === data.owner),
     };
   });
 
@@ -183,6 +186,7 @@ export const saveFinanceSection = createServerFn({ method: "POST" })
 
     const draft = (existing ?? []).find((r: any) => r.status === "draft");
     const nextVersion = ((existing ?? [])[0]?.version ?? 0) + 1;
+    await assertRoleOperations(supabase, context.userId, [{ resource: financePermissionResource(data.sectionKey), actions: [draft && !data.newVersion ? "update" : "create"] }]);
 
     if (draft && !data.newVersion) {
       const { error } = await supabase

@@ -111,13 +111,13 @@ export function FinancialConfiguration({ owner = "financial-configuration" }: { 
   const refresh = useCallback(
     async (id?: string | null) => {
       const result = (await load({
-        data: id ? { schoolId: id } : {},
+        data: id ? { schoolId: id, owner } : { owner },
       })) as unknown as ConfigState;
       setState(result);
       setSchoolId(result.schoolId);
       setLoading(false);
     },
-    [load],
+    [load, owner],
   );
 
   useEffect(() => {

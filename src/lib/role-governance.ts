@@ -3,6 +3,9 @@ import { MODULES, ROLES, ROLE_META, canAccess, type Role, type AccessLevel } fro
 
 export const ACCESS_OPERATIONS = ["read", "create", "update", "delete", "export"] as const;
 export type AccessOperation = (typeof ACCESS_OPERATIONS)[number];
+export const OPERATION_LABELS: Record<AccessOperation, string> = {
+  read: "View", create: "Add", update: "Edit", delete: "Delete", export: "Export",
+};
 export const grantSchema = z.object({
   resource: z.string().refine((id) => MODULES.some((m) => m.id === id), "Unknown module"),
   action: z.enum(ACCESS_OPERATIONS),
@@ -27,8 +30,6 @@ export const managedRoleSchema = z.object({
     keys.add(key);
     if (!canAccess(role.baseRole, ROLE_META[role.baseRole].accessLevel, grant.resource))
       ctx.addIssue({ code: "custom", message: "Permissions must remain within the existing base-role access" });
-    if (grant.action === "export" && grant.resource !== "archives")
-      ctx.addIssue({ code: "custom", message: "Export control is available only for archived records" });
   }
 });
 export const roleGovernanceSchema = z.object({
@@ -54,7 +55,7 @@ export function defaultManagedRole(baseRole: Exclude<Role, "super_admin">): Mana
     id: baseRole, name: ROLE_META[baseRole].label, description: ROLE_META[baseRole].tagline,
     baseRole, status: "active",
     grants: MODULES.filter((m) => canAccess(baseRole, ROLE_META[baseRole].accessLevel, m.id))
-      .flatMap((m) => ACCESS_OPERATIONS.filter((action) => action !== "export" || m.id === "archives").map((action) => ({ resource: m.id, action }))),
+      .flatMap((m) => ACCESS_OPERATIONS.map((action) => ({ resource: m.id, action }))),
   };
 }
 
@@ -64,7 +65,6 @@ export function operationAllowed(
   resource: string, action: AccessOperation,
 ): boolean {
   if (roles.includes("super_admin")) return true;
-  if (action === "export" && resource !== "archives") return false;
   const eligible = roles.filter((r): r is Role => ROLES.includes(r as Role) && canAccess(r as Role, level, resource));
   if (!eligible.length) return false;
   const builtInAllowed = eligible.some((id) => {
@@ -86,4 +86,21 @@ export function deleteManagedRole(governance: RoleGovernance, id: string): RoleG
   if (governance.assignments.some((a) => a.roleId === id)) throw new Error("Remove account assignments before deleting this role.");
   if (!governance.roles.some((r) => r.id === id)) throw new Error("Role not found.");
   return { ...governance, roles: governance.roles.filter((r) => r.id !== id) };
+}
+
+/** Revoking View clears its dependent operations; granting one operation never grants another. */
+export function setModuleGrant(role: ManagedRole, resource: string, action: AccessOperation, enabled: boolean): ManagedRole {
+  let grants = role.grants.filter((g) => !(g.resource === resource && (g.action === action || (!enabled && action === "read"))));
+  if (enabled) {
+    if (action !== "read" && !grants.some((g) => g.resource === resource && g.action === "read"))
+      grants.push({ resource, action: "read" });
+    grants.push({ resource, action });
+  }
+  return { ...role, grants };
+}
+
+/** Applied to new writes only so older saved roles still parse and fail closed at enforcement. */
+export function assertGrantDependencies(role: ManagedRole) {
+  if (role.grants.some((g) => g.action !== "read" && !role.grants.some((v) => v.resource === g.resource && v.action === "read")))
+    throw new Error("View permission is required for every module operation.");
 }

@@ -4,7 +4,7 @@ import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { assertSuperAdmin, getRoles, logAudit } from "@/lib/admin.server";
 import { resolveProvisionedSchool, readSchoolSettings } from "@/lib/school.server";
 import { defaultPeopleRules, peopleRulesSchema, PEOPLE_FEATURE_KEY } from "@/lib/people-rules";
-import { managedRoleSchema, defaultManagedRole, deleteManagedRole, operationAllowed } from "@/lib/role-governance";
+import { managedRoleSchema, defaultManagedRole, deleteManagedRole, operationAllowed, assertGrantDependencies } from "@/lib/role-governance";
 import { ACCESS_OPERATIONS } from "@/lib/role-governance";
 import { MODULES, ROLES, ROLE_META } from "@/lib/access";
 import { writeVersionedConfiguration } from "@/lib/configuration-writes";
@@ -60,6 +60,7 @@ export const mutateRoleGovernance = createServerFn({ method: "POST" })
     if (data.expectedVersion !== rules.version) throw new Error("These settings changed. Reload before saving.");
     let governance = rules.accessGovernance;
     if (data.action === "create" || data.action === "update") {
+      assertGrantDependencies(data.role);
       const existing = governance.roles.find((r) => r.id === data.role.id);
       const builtIn = ROLES.some((r) => r === data.role.id);
       const effectiveRoles = ROLES.filter((r) => r !== "super_admin").map((r) => governance.roles.find((v) => v.id === r) ?? defaultManagedRole(r));
@@ -85,6 +86,7 @@ export const mutateRoleGovernance = createServerFn({ method: "POST" })
       if (data.action === "assign") {
         const role = governance.roles.find((r) => r.id === data.roleId);
         if (!role || ROLES.some((r) => r === role.id) || role.status !== "active") throw new Error("Select an active custom role.");
+        assertGrantDependencies(role);
         if (!roles.includes(role.baseRole)) throw new Error("The custom role must match the account's existing protected role.");
         if (account.status !== "active") throw new Error("Only active accounts can receive a custom role.");
         assignments.push({ userId: data.userId, roleId: role.id });
@@ -128,4 +130,15 @@ export const getMyPortalProfile = createServerFn({ method: "GET" })
     const role = ROLES.find((r) => roles.includes(r));
     if (!role) throw new Error("No protected role is assigned to this account.");
     return { ...data, role, roleLabel: ROLE_META[role].label };
+  });
+
+/** Fresh server authorization for every application download or printed/PDF document. */
+export const authorizeModuleExport = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: unknown) => z.object({ moduleId: z.string().refine((id) => MODULES.some((m) => m.id === id), "Unknown module") }).parse(input))
+  .handler(async ({ data, context }) => {
+    const access = await loadRoleAccess(context.supabase, context.userId);
+    if (!operationAllowed(access.governance, context.userId, access.roles, access.level, data.moduleId, "export"))
+      throw new Error("Export permission is required to download or print this module's records.");
+    return { allowed: true };
   });

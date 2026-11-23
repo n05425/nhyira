@@ -3,6 +3,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { assertAdmin, logAudit } from "@/lib/admin.server";
 import { resolveProvisionedSchool } from "@/lib/school.server";
+import { assertRoleOperations } from "@/lib/role-access.server";
 import {
   admissionIdSchema,
   classTeacherSchema,
@@ -286,15 +287,19 @@ export const saveClassTeacher = createServerFn({ method: "POST" })
   .inputValidator((d: unknown) => classTeacherSchema.parse(d))
   .handler(async ({ data, context }) => {
     await assertAdmin(context.supabase, context.userId);
-    const { error } = await context.supabase.from("class_teachers").upsert(
-      {
+    const { data: existing, error: readError } = await context.supabase.from("class_teachers")
+      .select("id").eq("class_name", data.className).maybeSingle();
+    if (readError) throw new Error(readError.message);
+    await assertRoleOperations(context.supabase, context.userId, [{ resource: "admissions", actions: [existing ? "update" : "create"] }]);
+    const row = {
         class_name: data.className,
         teacher_name: data.teacherName,
         teacher_email: data.teacherEmail,
         teacher_phone: data.teacherPhone,
-      },
-      { onConflict: "class_name" },
-    );
+    };
+    const { error } = await (existing
+      ? context.supabase.from("class_teachers").update(row).eq("id", existing.id)
+      : context.supabase.from("class_teachers").insert(row));
     if (error) throw new Error(error.message);
     return { ok: true };
   });

@@ -1,5 +1,8 @@
-/** Print only a rendered document, in a same-origin frame, after its assets load. */
-export function printDocument(element: HTMLElement, title: string) {
+import { permitModuleExport } from "@/lib/module-export";
+
+/** Print only a rendered document, in a same-origin frame, after permission and assets load. */
+export async function printDocument(element: HTMLElement, title: string) {
+  if (!(await permitModuleExport())) return;
   const frame = document.createElement("iframe");
   frame.className = "offer-print-frame";
   frame.title = title;

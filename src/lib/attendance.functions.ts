@@ -3,6 +3,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { assertPeriodOpen, loadRules } from "@/lib/academic-calendar.server";
 import { registerQuerySchema, saveAttendanceSchema } from "@/lib/attendance.schemas";
+import { assertRoleOperations } from "@/lib/role-access.server";
 
 /**
  * Attendance is for administrators and for staff who carry class teacher
@@ -106,16 +107,32 @@ export const saveAttendance = createServerFn({ method: "POST" })
     await assertPeriodOpen(context.supabase, { date: data.date });
     const backdate = attendanceBackdateReason(await loadRules(context.supabase), data.date);
     if (backdate) throw new Error(backdate);
-    const { error } = await context.supabase.from("student_attendance").upsert(
-      data.entries.map((e) => ({
+    const ids = data.entries.map((e) => e.admissionId);
+    if (!ids.length) return { saved: 0 };
+    const { data: existing, error: readError } = await context.supabase.from("student_attendance")
+      .select("admission_id").eq("attendance_date", data.date).in("admission_id", ids);
+    if (readError) throw new Error(readError.message);
+    const known = new Set((existing ?? []).map((e) => e.admission_id));
+    const additions = data.entries.filter((e) => !known.has(e.admissionId));
+    const edits = data.entries.filter((e) => known.has(e.admissionId));
+    await assertRoleOperations(context.supabase, context.userId, [{ resource: "attendance", actions: [
+      ...(additions.length ? ["create" as const] : []), ...(edits.length ? ["update" as const] : []),
+    ] }]);
+    // Never let an Add-only request overwrite a row created concurrently by another user.
+    if (additions.length) {
+      const { error } = await context.supabase.from("student_attendance").insert(additions.map((e) => ({
         admission_id: e.admissionId,
         attendance_date: data.date,
         status: e.status,
         note: e.note ?? "",
-      })),
-      { onConflict: "admission_id,attendance_date" },
-    );
-    if (error) throw new Error(error.message);
+      })));
+      if (error) throw new Error(error.message);
+    }
+    for (const e of edits) {
+      const { error } = await context.supabase.from("student_attendance")
+        .update({ status: e.status, note: e.note ?? "" }).eq("admission_id", e.admissionId).eq("attendance_date", data.date);
+      if (error) throw new Error(error.message);
+    }
     return { saved: data.entries.length };
   });
 

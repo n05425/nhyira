@@ -4,6 +4,8 @@
  * prefixed so Excel opens it correctly.
  * ------------------------------------------------------------------ */
 
+import { permitModuleExport } from "@/lib/module-export";
+
 /** Quote one cell and neutralize formula-like text before spreadsheet opening. */
 export function csvCell(value: unknown) {
   let text = value == null ? "" : String(value);
@@ -19,21 +21,24 @@ export function toCsv(rows: unknown[][]) {
 /** Records -> CSV text, headers from the first record's keys. */
 export function recordsToCsv(rows: Record<string, unknown>[]) {
   if (rows.length === 0) return "";
-  const headers = Object.keys(rows[0]!);
+  const first = rows[0];
+  if (!first) return "";
+  const headers = Object.keys(first);
   return toCsv([headers, ...rows.map((r) => headers.map((h) => r[h]))]);
 }
 
 /** Download rows of cells as a CSV file. */
 export function downloadCsv(filename: string, rows: unknown[][]) {
-  downloadText(filename, toCsv(rows));
+  return downloadText(filename, toCsv(rows));
 }
 
 /** Download records as a CSV file. */
 export function downloadRecordsCsv(filename: string, rows: Record<string, unknown>[]) {
-  downloadText(filename, recordsToCsv(rows));
+  return downloadText(filename, recordsToCsv(rows));
 }
 
-function downloadText(filename: string, text: string) {
+async function downloadText(filename: string, text: string) {
+  if (!(await permitModuleExport())) return;
   const url = URL.createObjectURL(new Blob([text], { type: "text/csv;charset=utf-8" }));
   const a = document.createElement("a");
   a.href = url;

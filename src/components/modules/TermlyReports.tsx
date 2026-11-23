@@ -12,10 +12,13 @@ import { getReportOptions, getTermlyReport } from "@/lib/reports.functions";
 import { ordinal } from "@/lib/reports";
 import { useFinanceConfig } from "@/hooks/useFinanceConfig";
 import { useSchoolName } from "@/hooks/useSchoolName";
+import { printDocument } from "@/lib/print-document";
+import { useRoleAccess } from "@/hooks/useRoleAccess";
 
 const selectCls = "h-9 w-full rounded-md border border-input bg-background px-3 text-sm";
 
 export function TermlyReports() {
+  const access = useRoleAccess();
   const school = useSchoolName();
   const { money } = useFinanceConfig();
   const optionsFn = useServerFn(getReportOptions);
@@ -183,7 +186,10 @@ export function TermlyReports() {
           </section>}
 
           <div className="flex gap-2 print:hidden">
-            <Button onClick={() => window.print()}>
+            <Button disabled={!access.allows("termly-reports", "export")} onClick={() => {
+              const element = document.getElementById("report-card");
+              if (element) void printDocument(element, "Learner report card");
+            }}>
               <Printer className="size-4" aria-hidden /> Print / Save as PDF
             </Button>
           </div>

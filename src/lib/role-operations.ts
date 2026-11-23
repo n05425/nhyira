@@ -1,4 +1,5 @@
 import type { AccessOperation } from "@/lib/role-governance";
+import { getSection } from "@/lib/finance-config";
 
 // Explicit server-controlled identity; callers cannot select their own permission target.
 export const SERVER_OPERATIONS: Record<string, { resource: string; actions: AccessOperation[] }> = {
@@ -9,7 +10,7 @@ export const SERVER_OPERATIONS: Record<string, { resource: string; actions: Acce
   "admin:updateAccount": { resource: "user-management", actions: ["update"] },
   "admin:setAccountStatus": { resource: "user-management", actions: ["update"] },
   "admin:deleteAccount": { resource: "user-management", actions: ["delete"] },
-  "admin:bulkImportAccounts": { resource: "user-management", actions: ["create", "update"] },
+  "admin:bulkImportAccounts": { resource: "user-management", actions: ["create"] },
   "admin:adminResetPassword": { resource: "user-management", actions: ["update"] },
   "admin:listResetRequests": { resource: "user-management", actions: ["read"] },
   "admin:resolveResetRequest": { resource: "user-management", actions: ["update"] },
@@ -25,7 +26,7 @@ export const SERVER_OPERATIONS: Record<string, { resource: string; actions: Acce
   "admissions:createAdmission": { resource: "admissions", actions: ["create"] },
   "admissions:updateAdmission": { resource: "admissions", actions: ["update"] },
   "admissions:deleteAdmission": { resource: "admissions", actions: ["delete"] },
-  "admissions:saveClassTeacher": { resource: "admissions", actions: ["create", "update"] },
+  "admissions:saveClassTeacher": { resource: "admissions", actions: ["read"] },
   "admissions:recordExeat": { resource: "admissions", actions: ["create"] },
   "admissions:getMyChildren": { resource: "my-children", actions: ["read"] },
   "admissions:getChildDetail": { resource: "my-children", actions: ["read"] },
@@ -39,15 +40,15 @@ export const SERVER_OPERATIONS: Record<string, { resource: string; actions: Acce
   "assignments:getAssignmentDetails": { resource: "assignments", actions: ["read"] },
   "assignments:saveAssignment": { resource: "assignments", actions: ["create", "update"] },
   "assignments:deleteAssignment": { resource: "assignments", actions: ["delete"] },
-  "assignments:manageAssignmentGroups": { resource: "assignments", actions: ["create", "update"] },
-  "assignments:submitAssignment": { resource: "assignments", actions: ["update"] },
+  "assignments:manageAssignmentGroups": { resource: "assignments", actions: ["create"] },
+  "assignments:submitAssignment": { resource: "assignments", actions: ["create"] },
   "assignments:gradeSubmission": { resource: "assignments", actions: ["update"] },
   "assignments:requestRegrade": { resource: "assignments", actions: ["create"] },
   "assignments:reviewRegradeRequest": { resource: "assignments", actions: ["update"] },
   "attendance:getAttendanceAccess": { resource: "attendance", actions: ["read"] },
   "attendance:getAttendanceClasses": { resource: "attendance", actions: ["read"] },
   "attendance:getClassRegister": { resource: "attendance", actions: ["read"] },
-  "attendance:saveAttendance": { resource: "attendance", actions: ["create", "update"] },
+  "attendance:saveAttendance": { resource: "attendance", actions: ["read"] },
   "attendance:getAttendanceHistory": { resource: "attendance", actions: ["read"] },
   "exams:listExams": { resource: "exams-quizzes", actions: ["read"] },
   "exams:getExamDetails": { resource: "exams-quizzes", actions: ["read"] },
@@ -56,7 +57,7 @@ export const SERVER_OPERATIONS: Record<string, { resource: string; actions: Acce
   "exams:startExamAttempt": { resource: "exams-quizzes", actions: ["create"] },
   "exams:submitExamAnswers": { resource: "exams-quizzes", actions: ["update"] },
   "exams:gradeSubmission": { resource: "exams-quizzes", actions: ["update"] },
-  "exams:syncExamToAssessment": { resource: "exams-quizzes", actions: ["create", "update"] },
+  "exams:syncExamToAssessment": { resource: "exams-quizzes", actions: ["read"] },
   "exams:listSubmissions": { resource: "exams-quizzes", actions: ["read"] },
   "fees-invoicing:getFeesInvoicingOverview": { resource: "fees-invoicing", actions: ["read"] },
   "fees-invoicing:executeBillingRun": { resource: "fees-invoicing", actions: ["create"] },
@@ -66,7 +67,7 @@ export const SERVER_OPERATIONS: Record<string, { resource: string; actions: Acce
   "finance:addIncome": { resource: "financial-management", actions: ["create"] },
   "finance:addExpense": { resource: "financial-management", actions: ["create"] },
   "finance:addPayrollEntry": { resource: "financial-management", actions: ["create"] },
-  "finance:importStaffPayroll": { resource: "financial-management", actions: ["create", "update"] },
+  "finance:importStaffPayroll": { resource: "financial-management", actions: ["create"] },
   "finance:processPayroll": { resource: "financial-management", actions: ["update"] },
   "finance:addStudentFee": { resource: "financial-management", actions: ["create"] },
   "finance:updateStudentFee": { resource: "financial-management", actions: ["update"] },
@@ -76,6 +77,7 @@ export const SERVER_OPERATIONS: Record<string, { resource: string; actions: Acce
   "invoices:issueInvoice": { resource: "invoices", actions: ["create"] },
   "invoices:voidInvoice": { resource: "invoices", actions: ["update"] },
   "lessons:listLessons": { resource: "lessons", actions: ["read"] },
+  "lessons:getMyTeachingScope": { resource: "lessons", actions: ["read"] },
   "lessons:listAvailableQuizzes": { resource: "lessons", actions: ["read"] },
   "lessons:getLessonDetails": { resource: "lessons", actions: ["read"] },
   "lessons:saveLesson": { resource: "lessons", actions: ["create", "update"] },
@@ -158,12 +160,12 @@ export const SERVER_OPERATIONS: Record<string, { resource: string; actions: Acce
   "teaching:listTeachingAssignments": { resource: "user-management", actions: ["read"] },
   "teaching:getTeachingAssignments": { resource: "user-management", actions: ["read"] },
   "finance-config:getFinanceConfiguration": { resource: "financial-configuration", actions: ["read"] },
-  "finance-config:saveFinanceSection": { resource: "financial-configuration", actions: ["create", "update"] },
+  "finance-config:saveFinanceSection": { resource: "financial-configuration", actions: ["read"] },
   "finance-config:setFinanceSectionStatus": { resource: "financial-configuration", actions: ["update"] },
   "finance-config:saveFinanceItem": { resource: "financial-configuration", actions: ["create", "update"] },
   "finance-config:saveFinanceRule": { resource: "financial-configuration", actions: ["create", "update"] },
   "finance-config:deleteFinanceConfigRow": { resource: "financial-configuration", actions: ["delete"] },
-  "finance-config:seedFinanceDefaults": { resource: "financial-configuration", actions: ["create", "update"] },
+  "finance-config:seedFinanceDefaults": { resource: "financial-configuration", actions: ["create"] },
   "config:getConfiguration": { resource: "system-configuration", actions: ["read"] },
   "config:createSchool": { resource: "system-configuration", actions: ["create"] },
   "config:updateSchool": { resource: "system-configuration", actions: ["update"] },
@@ -189,13 +191,45 @@ export const SERVER_OPERATIONS: Record<string, { resource: string; actions: Acce
   "config:savePeopleSettings": { resource: "people-configuration", actions: ["create", "update"] },
 };
 
-export function serverOperation(meta: { filename: string; name: string }, data: unknown) {
+// Shared pickers/session/recovery and Super-Admin-only governance retain their own guards.
+export const OPERATION_EXEMPTIONS = new Set([
+  "admin:recordLogin", "admin:changeOwnPassword", "admin:getPortalOverview", "admin:setMyAvatar",
+  "config:getOperationsRules", "config:getTenantOptions", "config:getSubjectOptions", "config:getSubjectCatalog",
+  "config:getSchoolClasses", "config:getAcademicCalendar", "config:getAcademicRules", "config:getPeopleRules",
+  "finance-config:getActiveFinanceConfig", "teaching:getMyTeachingScope",
+  "role-governance:getRoleGovernance", "role-governance:mutateRoleGovernance",
+  "role-governance:getMyRoleAccess", "role-governance:getMyPortalProfile", "role-governance:authorizeModuleExport",
+  "publicity:getPublicLandingData",
+]);
+
+export function operationKey(meta: { filename: string; name: string }) {
   const stem = meta.filename.split("?")[0]?.replace(/\\/g, "/").match(/([^/]+)\.functions\.[tj]sx?$/)?.[1];
-  if (!stem) return null;
-  const operation = SERVER_OPERATIONS[`${stem}:${meta.name}`];
+  return stem ? `${stem}:${meta.name}` : null;
+}
+
+export function financePermissionResource(sectionKey: string) {
+  const section = getSection(sectionKey);
+  if (!section) throw new Error("Unknown configuration permission target.");
+  return section.area.owner ?? "financial-configuration";
+}
+
+export function serverOperation(meta: { filename: string; name: string }, data: unknown) {
+  const key = operationKey(meta);
+  if (!key) return null;
+  let operation = SERVER_OPERATIONS[key];
   if (!operation) return null;
   const input = data && typeof data === "object" ? data as Record<string, unknown> : {};
-  const idEditors = new Set(["saveExam", "saveAssignment", "saveLesson", "saveLibraryBook", "saveTimetableSlot", "saveFinanceItem", "upsertAnnouncement", "upsertPublicityNotice", "upsertPublicityCircular", "upsertPublicityBanner", "upsertPublicityArticle", "upsertPublicityMediaGallery"]);
+  if (key === "finance-config:getFinanceConfiguration") {
+    const owner = input['owner'] ?? "financial-configuration";
+    if (owner !== "financial-configuration" && owner !== "reporting-configuration") throw new Error("Unknown configuration owner.");
+    operation = { ...operation, resource: owner };
+  }
+  if (["finance-config:saveFinanceSection", "finance-config:saveFinanceItem", "finance-config:saveFinanceRule"].includes(key)) {
+    const target = input['sectionKey'] ?? input['listKey'] ?? input['ruleKey'];
+    if (typeof target !== "string") throw new Error("Missing configuration permission target.");
+    operation = { ...operation, resource: financePermissionResource(target) };
+  }
+  const idEditors = new Set(["saveAssessment", "saveFinanceRule", "saveExam", "saveAssignment", "saveLesson", "saveLibraryBook", "saveTimetableSlot", "saveFinanceItem", "upsertAnnouncement", "upsertPublicityNotice", "upsertPublicityCircular", "upsertPublicityBanner", "upsertPublicityArticle", "upsertPublicityMediaGallery"]);
   if (idEditors.has(meta.name)) return { ...operation, actions: [input['id'] ? "update" : "create"] as AccessOperation[] };
   return operation;
 }

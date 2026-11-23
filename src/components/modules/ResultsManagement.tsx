@@ -1,4 +1,7 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
+import { downloadCsv } from "@/lib/csv";
+import { printDocument } from "@/lib/print-document";
+import { useRoleAccess } from "@/hooks/useRoleAccess";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   FileSpreadsheet,
@@ -36,6 +39,8 @@ import {
 import { PublicationStatus } from "@/lib/results.schemas";
 
 export function ResultsManagement() {
+  const documentRef = useRef<HTMLDivElement>(null);
+  const access = useRoleAccess();
   const { profile } = useSession();
   const school = useSchoolName();
   const queryClient = useQueryClient();
@@ -119,7 +124,7 @@ export function ResultsManagement() {
   });
 
   const handlePrint = () => {
-    window.print();
+    if (documentRef.current) void printDocument(documentRef.current, "Results");
   };
 
   const exportCSV = () => {
@@ -128,7 +133,7 @@ export function ResultsManagement() {
     const headers = ["Admission No", "Student Name", ...bs.subjects.map((s) => `${s} Total`), "Overall Total", "Average %", "Rank", "Status"];
     const rows = bs.students.map((st) => [
       st.admissionNumber,
-      `"${st.studentName}"`,
+      st.studentName,
       ...bs.subjects.map((s) => st.subjects[s]?.totalScore ?? 0),
       st.overallTotal,
       st.overallAverage,
@@ -136,14 +141,7 @@ export function ResultsManagement() {
       st.status,
     ]);
 
-    const csvContent = "data:text/csv;charset=utf-8," + [headers.join(","), ...rows.map((e) => e.join(","))].join("\n");
-    const encodedUri = encodeURI(csvContent);
-    const link = document.createElement("a");
-    link.setAttribute("href", encodedUri);
-    link.setAttribute("download", `Broadsheet_${selectedClass}_${selectedTerm}.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+    void downloadCsv(`Broadsheet_${selectedClass}_${selectedTerm}.csv`, [headers, ...rows]);
   };
 
   const filteredStudents = (broadsheetRes?.broadsheet.students ?? []).filter(
@@ -153,7 +151,7 @@ export function ResultsManagement() {
   );
 
   return (
-    <div className="space-y-6">
+    <div ref={documentRef} className="space-y-6">
       {/* Top Filter Controls Bar */}
       <Card>
         <CardContent className="p-4 flex flex-wrap items-center justify-between gap-4">
@@ -236,10 +234,10 @@ export function ResultsManagement() {
                   </CardDescription>
                 </div>
                 <div className="flex items-center gap-2">
-                  <Button variant="outline" size="sm" onClick={exportCSV} className="gap-1.5">
+                  <Button variant="outline" size="sm" onClick={exportCSV} disabled={!access.allows("results", "export")} className="gap-1.5">
                     <Download className="size-4" /> Export CSV
                   </Button>
-                  <Button variant="outline" size="sm" onClick={handlePrint} className="gap-1.5">
+                  <Button variant="outline" size="sm" onClick={handlePrint} disabled={!access.allows("results", "export")} className="gap-1.5">
                     <Printer className="size-4" /> Print
                   </Button>
                 </div>
@@ -395,7 +393,7 @@ export function ResultsManagement() {
                 <CardTitle className="text-xl">Official Student Result Card</CardTitle>
                 <CardDescription>View formatted result sheet for printing and verification</CardDescription>
               </div>
-              <Button variant="outline" size="sm" onClick={handlePrint} className="gap-1.5">
+              <Button variant="outline" size="sm" onClick={handlePrint} disabled={!access.allows("results", "export")} className="gap-1.5">
                 <Printer className="size-4" /> Print Card
               </Button>
             </CardHeader>

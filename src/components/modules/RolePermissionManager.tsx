@@ -12,10 +12,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { getRoleGovernance, mutateRoleGovernance, type RoleGovernanceMutation } from "@/lib/role-governance.functions";
-import { ACCESS_OPERATIONS, managedRoleSchema, type ManagedRole } from "@/lib/role-governance";
+import { ACCESS_OPERATIONS, OPERATION_LABELS, setModuleGrant, managedRoleSchema, type ManagedRole } from "@/lib/role-governance";
 import { MODULES, ROLES, ROLE_META, canAccess } from "@/lib/access";
 
-const OPERATION_LABEL = { read: "View", create: "Add", update: "Edit", delete: "Delete", export: "Export" };
+const OPERATION_LABEL = OPERATION_LABELS;
 type BaseRole = ManagedRole["baseRole"];
 
 export function RolePermissionManager() {
@@ -138,11 +138,9 @@ export function RolePermissionManager() {
               {ACCESS_OPERATIONS.map((op) => <TableHead key={op} className="w-16 text-center">{OPERATION_LABEL[op]}</TableHead>)}
             </TableRow></TableHeader><TableBody>{visibleModules.map((m) => <TableRow key={m.id}>
               <TableCell><span className="block font-medium">{m.name}</span><span className="text-xs text-muted-foreground">{m.category}</span></TableCell>
-              {ACCESS_OPERATIONS.map((op) => <TableCell key={op} className="text-center"><Checkbox aria-label={`${OPERATION_LABEL[op]} ${m.name}`} disabled={busy || (op === "export" && m.id !== "archives")}
+              {ACCESS_OPERATIONS.map((op) => <TableCell key={op} className="text-center"><Checkbox aria-label={`${OPERATION_LABEL[op]} ${m.name}`} disabled={busy}
                 checked={draft.grants.some((g) => g.resource === m.id && g.action === op)} onCheckedChange={(checked) => {
-                  const grants = draft.grants.filter((g) => !(g.resource === m.id && g.action === op));
-                  if (checked === true) grants.push({ resource: m.id, action: op });
-                  changeDraft({ ...draft, grants });
+                  changeDraft(setModuleGrant(draft, m.id, op, checked === true));
                 }} /></TableCell>)}
             </TableRow>)}{!visibleModules.length && <TableRow><TableCell colSpan={6} className="text-center text-muted-foreground">No matching modules.</TableCell></TableRow>}</TableBody></Table>
           </div>
