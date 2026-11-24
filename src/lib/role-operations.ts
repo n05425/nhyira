@@ -18,7 +18,7 @@ export const SERVER_OPERATIONS: Record<string, { resource: string; actions: Acce
   "admin:listAuditLogs": { resource: "user-management", actions: ["read"] },
   "admin:clearAuditLogs": { resource: "user-management", actions: ["delete"] },
   "admin:getSecuritySettings": { resource: "user-management", actions: ["read"] },
-  "admin:saveSecuritySettings": { resource: "user-management", actions: ["create", "update"] },
+  "admin:saveSecuritySettings": { resource: "user-management", actions: ["update"] },
   "admin:forcePasswordChangeAll": { resource: "user-management", actions: ["update"] },
   "admin:lockAllAccounts": { resource: "user-management", actions: ["update"] },
   "admin:getUserVerificationData": { resource: "user-verification", actions: ["read"] },
@@ -116,7 +116,7 @@ export const SERVER_OPERATIONS: Record<string, { resource: string; actions: Acce
   "performance-tracker:createInterventionPlan": { resource: "performance-tracker", actions: ["create"] },
   "performance-tracker:updateInterventionPlan": { resource: "performance-tracker", actions: ["update"] },
   "performance-tracker:addInterventionNote": { resource: "performance-tracker", actions: ["create"] },
-  "performance-tracker:updatePerformanceRiskRules": { resource: "performance-tracker", actions: ["create", "update"] },
+  "performance-tracker:updatePerformanceRiskRules": { resource: "performance-tracker", actions: ["update"] },
   "publicity:getPublicityNotices": { resource: "publicity", actions: ["read"] },
   "publicity:upsertPublicityNotice": { resource: "publicity", actions: ["create", "update"] },
   "publicity:deletePublicityNotice": { resource: "publicity", actions: ["delete"] },
@@ -174,21 +174,21 @@ export const SERVER_OPERATIONS: Record<string, { resource: string; actions: Acce
   "config:createSchoolType": { resource: "system-configuration", actions: ["create"] },
   "config:createSubject": { resource: "system-configuration", actions: ["create"] },
   "config:deleteSubject": { resource: "system-configuration", actions: ["delete"] },
-  "config:saveTenantSettings": { resource: "system-configuration", actions: ["create", "update"] },
-  "config:saveBranding": { resource: "system-configuration", actions: ["create", "update"] },
-  "config:saveAdmissionNumbering": { resource: "operations-configuration", actions: ["create", "update"] },
-  "config:saveEmployeeNumbering": { resource: "system-configuration", actions: ["create", "update"] },
+  "config:saveTenantSettings": { resource: "system-configuration", actions: ["update"] },
+  "config:saveBranding": { resource: "system-configuration", actions: ["update"] },
+  "config:saveAdmissionNumbering": { resource: "operations-configuration", actions: ["update"] },
+  "config:saveEmployeeNumbering": { resource: "system-configuration", actions: ["update"] },
   "config:getSchoolOperationsSettings": { resource: "operations-configuration", actions: ["read"] },
-  "config:saveOperationsRules": { resource: "operations-configuration", actions: ["create", "update"] },
+  "config:saveOperationsRules": { resource: "operations-configuration", actions: ["update"] },
   "config:createSchoolClass": { resource: "system-configuration", actions: ["create"] },
   "config:updateSchoolClass": { resource: "system-configuration", actions: ["update"] },
   "config:deleteSchoolClass": { resource: "system-configuration", actions: ["delete"] },
   "config:getSchoolCalendar": { resource: "academic-configuration", actions: ["read"] },
-  "config:saveAcademicCalendar": { resource: "academic-configuration", actions: ["create", "update"] },
+  "config:saveAcademicCalendar": { resource: "academic-configuration", actions: ["update"] },
   "config:getSchoolAcademicSettings": { resource: "academic-configuration", actions: ["read"] },
-  "config:saveAcademicSettings": { resource: "academic-configuration", actions: ["create", "update"] },
+  "config:saveAcademicSettings": { resource: "academic-configuration", actions: ["update"] },
   "config:getSchoolPeopleSettings": { resource: "people-configuration", actions: ["read"] },
-  "config:savePeopleSettings": { resource: "people-configuration", actions: ["create", "update"] },
+  "config:savePeopleSettings": { resource: "people-configuration", actions: ["update"] },
 };
 
 // Shared pickers/session/recovery and Super-Admin-only governance retain their own guards.
@@ -216,8 +216,9 @@ export function financePermissionResource(sectionKey: string) {
 export function serverOperation(meta: { filename: string; name: string }, data: unknown) {
   const key = operationKey(meta);
   if (!key) return null;
-  let operation = SERVER_OPERATIONS[key];
-  if (!operation) return null;
+  const registered = SERVER_OPERATIONS[key];
+  if (!registered) return null;
+  let operation = { ...registered, actions: [...registered.actions] };
   const input = data && typeof data === "object" ? data as Record<string, unknown> : {};
   if (key === "finance-config:getFinanceConfiguration") {
     const owner = input['owner'] ?? "financial-configuration";

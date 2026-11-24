@@ -41,7 +41,8 @@ export async function assertServerRoleOperation(
       : kind === "section" ? { table: "finance_config_sections", column: "section_key" } : null;
     if (!target || typeof input['id'] !== "string") throw new Error("Invalid configuration record.");
     const { data: row, error } = await supabase.from(target.table).select(target.column).eq("id", input['id']).maybeSingle();
-    const sectionKey: unknown = row?.[target.column];
+    const record = row && typeof row === "object" && !Array.isArray(row) ? row as Record<string, unknown> : null;
+    const sectionKey = record?.[target.column];
     if (error || typeof sectionKey !== "string") throw new Error("Configuration record not found.");
     operation.resource = financePermissionResource(sectionKey);
   }

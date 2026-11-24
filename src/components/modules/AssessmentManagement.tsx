@@ -42,9 +42,12 @@ type Context = Awaited<ReturnType<typeof getAssessmentContext>>;
 type Draft = { score: string; remark: string; createId?: string };
 const PAGE_SIZE = 50;
 
+import { useRoleAccess } from "@/hooks/useRoleAccess";
+
 const download = downloadCsv;
 
 export function AssessmentManagement() {
+  const access = useRoleAccess();
   const rosterFn = useServerFn(getAssessmentStudents),
     recordsFn = useServerFn(listAssessments),
     contextFn = useServerFn(getAssessmentContext);
@@ -399,7 +402,7 @@ export function AssessmentManagement() {
               <Search className="size-4" />
               Load class roster
             </Button>
-            <Button variant="outline" onClick={() => void template()} disabled={busy || !scope}>
+            <Button variant="outline" onClick={() => void template()} disabled={busy || !scope || !access.allows("assessment", "export")}>
               <Download className="size-4" />
               Class list template
             </Button>
@@ -426,7 +429,7 @@ export function AssessmentManagement() {
                   />
                 </Field>
                 <div className="flex items-end">
-                  <Button onClick={() => void saveRoster()} disabled={busy || !hasDrafts}>
+                  <Button onClick={() => void saveRoster()} disabled={busy || !hasDrafts || !access.allows("assessment", "create")}>
                     <Save className="size-4" />
                     Save entered scores
                   </Button>
@@ -532,7 +535,7 @@ export function AssessmentManagement() {
               Fetch records
             </Button>
             <Button
-              disabled={busy || !scope}
+              disabled={busy || !scope || !access.allows("assessment", "export")}
               variant="outline"
               onClick={() => void exportRecords()}
             >
@@ -575,7 +578,7 @@ export function AssessmentManagement() {
                 </Field>
               </div>
               <div className="flex gap-2">
-                <Button onClick={() => void update()}>
+                <Button disabled={!access.allows("assessment", "update")} onClick={() => void update()}>
                   <Save className="size-4" />
                   Save changes
                 </Button>
@@ -609,7 +612,7 @@ export function AssessmentManagement() {
                     <td className="p-2">
                       <div className="flex gap-1">
                         <Button
-                          disabled={busy}
+                          disabled={busy || !access.allows("assessment", "update")}
                           variant="ghost"
                           size="icon"
                           title="Edit assessment"
@@ -619,7 +622,7 @@ export function AssessmentManagement() {
                           <Pencil className="size-4" />
                         </Button>
                         <Button
-                          disabled={busy}
+                          disabled={busy || !access.allows("assessment", "delete")}
                           variant="ghost"
                           size="icon"
                           title="Delete assessment"
@@ -667,7 +670,7 @@ export function AssessmentManagement() {
               <Search className="size-4" />
               Generate report
             </Button>
-            <Button disabled={busy || !report?.length} variant="outline" onClick={print}>
+            <Button disabled={busy || !report?.length || !access.allows("assessment", "export")} variant="outline" onClick={print}>
               <Printer className="size-4" />
               Print / Save PDF
             </Button>

@@ -15,13 +15,14 @@
 - [ ] Add regression coverage and run applicable tests and browser workflows.
 - [ ] Document evidence, migration status and remaining limitations.
 
-# Roadmap — Custom role and operation management
-
 # Roadmap — Distinct module operations
 
-- [ ] Enforce separate View, Add, Edit, Delete and Export grants, including saved role updates and assignments.
-- [ ] Check record identity for mixed saves and enforce export permissions across module downloads.
-- [ ] Add regression tests and verify available flows; authenticated hosted checks remain blocked by the external sign-in setup.
+- [x] Enforce separate View, Add, Edit, Delete and Export grants, including saved role updates and assignments.
+- [x] Check record identity for mixed saves and enforce export permissions across module downloads.
+- [x] Add regression tests and verify available flows; signed-out desktop/mobile protection checked and full regression suite passed.
+- [ ] Verify authenticated permission changes and assignment CRUD against hosted data — blocked: existing external sign-in has no available test session.
+
+# Roadmap — Custom role and operation management
 
 - [x] Extend existing role management with super-admin-only role, permission and assignment CRUD without replacing built-in controls.
 - [x] Enforce custom operation policies on the server and mirror allowed module access in the portal.

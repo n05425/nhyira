@@ -1,10 +1,12 @@
 import { describe, it, expect, vi } from "vitest";
+import { readdirSync, readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { defaultManagedRole, deleteManagedRole, managedRoleSchema, operationAllowed, roleGovernanceSchema, type RoleGovernance } from "@/lib/role-governance";
+import { ACCESS_OPERATIONS, assertGrantDependencies, defaultManagedRole, deleteManagedRole, managedRoleSchema, operationAllowed, roleGovernanceSchema, setModuleGrant, type RoleGovernance } from "@/lib/role-governance";
 import { defaultPeopleRules, peopleRulesSchema } from "@/lib/people-rules";
 import { assertSuperAdmin } from "@/lib/admin.server";
-import { assertServerRoleOperation } from "@/lib/role-access.server";
-import { serverOperation } from "@/lib/role-operations";
+import { assertRoleOperations, assertServerRoleOperation } from "@/lib/role-access.server";
+import { financePermissionResource, OPERATION_EXEMPTIONS, SERVER_OPERATIONS, serverOperation } from "@/lib/role-operations";
 
 const userId = "00000000-0000-4000-8000-000000000001";
 const custom = { ...defaultManagedRole("staff"), id: "exam-reviewer", name: "Exam reviewer", grants: [{ resource: "assessment", action: "read" as const }] };
@@ -95,11 +97,14 @@ describe("server-side operation enforcement", () => {
   it("identifies reads, writes and deletion independently of caller input", () => {
     expect(serverOperation({ filename: "src/lib/assessment.functions.ts", name: "deleteAssessment" }, { resource: "dashboard", action: "read" })).toEqual({ resource: "assessment", actions: ["delete"] });
   });
-  it("ID editors distinguish create from update while natural-key upserts require both", () => {
+  it("ID editors distinguish Add from Edit, including assessments and finance rules", () => {
     const meta = { filename: "src/lib/assignments.functions.ts", name: "saveAssignment" };
     expect(serverOperation(meta, {})?.actions).toEqual(["create"]);
     expect(serverOperation(meta, { id: "existing" })?.actions).toEqual(["update"]);
-    expect(serverOperation({ filename: "src/lib/assessment.functions.ts", name: "saveAssessment" }, {})?.actions).toEqual(["create", "update"]);
+    expect(serverOperation({ filename: "src/lib/assessment.functions.ts", name: "saveAssessment" }, {})?.actions).toEqual(["create"]);
+    expect(serverOperation({ filename: "src/lib/assessment.functions.ts", name: "saveAssessment" }, { id: "existing" })?.actions).toEqual(["update"]);
+    expect(serverOperation({ filename: "src/lib/finance-config.functions.ts", name: "saveFinanceRule" }, { ruleKey: "retention-policies" })?.actions).toEqual(["create"]);
+    expect(serverOperation({ filename: "src/lib/finance-config.functions.ts", name: "saveFinanceRule" }, { ruleKey: "retention-policies", id: "existing" })?.actions).toEqual(["update"]);
   });
   it("preserves public landing reads and account-recovery checks", () => {
     expect(serverOperation({ filename: "src/lib/publicity.functions.ts", name: "getPublicLandingData" }, {})).toBeNull();
@@ -119,5 +124,106 @@ describe("server-side operation enforcement", () => {
       }),
     } as unknown as SupabaseClient;
     await expect(assertServerRoleOperation(client, userId, { filename: "src/lib/assessment.functions.ts", name: "deleteAssessment" }, {})).rejects.toThrow("delete access");
+  });
+});
+
+function permissionClient(governance: RoleGovernance) {
+  const client = {
+    rpc: vi.fn().mockResolvedValue({ data: "school-a", error: null }),
+    from: vi.fn((table: string) => {
+      const result = table === "user_roles" ? { data: [{ role: "staff" }], error: null }
+        : table === "profiles" ? { data: { access_level: "standard", status: "active" }, error: null }
+        : table === "schools" ? { data: { id: "school-a" }, error: null }
+        : { data: { features: { __people_rules: { accessGovernance: governance } } }, error: null };
+      const builder = { select: vi.fn(), eq: vi.fn(), maybeSingle: vi.fn().mockResolvedValue(result), then: (resolveValue: (value: unknown) => void) => Promise.resolve(result).then(resolveValue) };
+      builder.select.mockReturnValue(builder); builder.eq.mockReturnValue(builder);
+      return builder;
+    }),
+  };
+  return client as unknown as SupabaseClient;
+}
+
+describe("five independent operation permissions", () => {
+  for (const action of ACCESS_OPERATIONS) {
+    it(`granting ${action} never grants any other operation`, () => {
+      const role = setModuleGrant({ ...custom, grants: [] }, "assessment", action, true);
+      const governance: RoleGovernance = { roles: [role], assignments: assigned.assignments };
+      for (const candidate of ACCESS_OPERATIONS)
+        expect(operationAllowed(governance, userId, ["staff"], "standard", "assessment", candidate)).toBe(candidate === "read" || candidate === action);
+    });
+  }
+  it("revoking View removes Add, Edit, Delete and Export for that module only", () => {
+    const role = setModuleGrant(defaultManagedRole("staff"), "assessment", "read", false);
+    expect(role.grants.filter((g) => g.resource === "assessment")).toEqual([]);
+    expect(role.grants.some((g) => g.resource === "assignments")).toBe(true);
+  });
+  it("permission updates apply immediately to an existing assignment", () => {
+    const role = setModuleGrant(custom, "assessment", "update", true);
+    const governance = { ...assigned, roles: [role] };
+    expect(operationAllowed(governance, userId, ["staff"], "standard", "assessment", "update")).toBe(true);
+    governance.roles = [setModuleGrant(role, "assessment", "update", false)];
+    expect(operationAllowed(governance, userId, ["staff"], "standard", "assessment", "update")).toBe(false);
+    expect(governance.assignments).toEqual(assigned.assignments);
+  });
+  it("rejects inconsistent permission updates or assignments without View", () => {
+    expect(() => assertGrantDependencies({ ...custom, grants: [{ resource: "assessment", action: "create" }] })).toThrow("View permission");
+    expect(() => assertGrantDependencies(custom)).not.toThrow();
+  });
+  it("supports independent Export permission outside Archives", () => {
+    const role = setModuleGrant(custom, "assessment", "export", true);
+    expect(managedRoleSchema.safeParse(role).success).toBe(true);
+    expect(operationAllowed({ ...assigned, roles: [role] }, userId, ["staff"], "standard", "assessment", "export")).toBe(true);
+    expect(operationAllowed(assigned, userId, ["staff"], "standard", "assessment", "export")).toBe(false);
+  });
+  it("requires both permissions for a mixed attendance register, but not for a new-only register", async () => {
+    const role = setModuleGrant({ ...custom, grants: [] }, "attendance", "create", true);
+    const client = permissionClient({ roles: [role], assignments: assigned.assignments });
+    await expect(assertRoleOperations(client, userId, [{ resource: "attendance", actions: ["create"] }])).resolves.toBeUndefined();
+    await expect(assertRoleOperations(client, userId, [{ resource: "attendance", actions: ["create", "update"] }])).rejects.toThrow("update access");
+  });
+  it("rejects Export at the server for a View-only account", async () => {
+    await expect(assertRoleOperations(permissionClient(assigned), userId, [{ resource: "assessment", actions: ["export"] }])).rejects.toThrow("export access");
+  });
+  it("rejects unregistered authenticated operations rather than skipping the guard", async () => {
+    await expect(assertServerRoleOperation(permissionClient(assigned), userId, { filename: "src/lib/new.functions.ts", name: "deleteRecord" }, {})).rejects.toThrow("no registered permission");
+  });
+  for (const [stem, name] of [["assignments", "gradeSubmission"], ["assignments", "reviewRegradeRequest"], ["exams", "syncExamToAssessment"]]) {
+    it(`blocks assessment creation through ${stem}:${name} when Assessment/Add is denied`, async () => {
+      const role = setModuleGrant(setModuleGrant(custom, "assignments", "update", true), "exams-quizzes", "read", true);
+      const client = permissionClient({ ...assigned, roles: [role] });
+      await expect(assertServerRoleOperation(client, userId, { filename: `src/lib/${stem}.functions.ts`, name: name ?? "" }, { syncToAssessment: true })).rejects.toThrow("create access to assessment");
+    });
+  }
+  it("classifies insert-only imports, submissions and groups as Add", () => {
+    for (const [stem, name] of [["admin", "bulkImportAccounts"], ["finance", "importStaffPayroll"], ["assignments", "submitAssignment"], ["assignments", "manageAssignmentGroups"]])
+      expect(serverOperation({ filename: `src/lib/${stem}.functions.ts`, name: name ?? "" }, {})?.actions).toEqual(["create"]);
+  });
+  it("editing singleton settings requires Edit, not Add", () => {
+    expect(serverOperation({ filename: "src/lib/admin.functions.ts", name: "saveSecuritySettings" }, {})?.actions).toEqual(["update"]);
+    expect(serverOperation({ filename: "src/lib/performance-tracker.functions.ts", name: "updatePerformanceRiskRules" }, {})?.actions).toEqual(["update"]);
+    expect(serverOperation({ filename: "src/lib/config.functions.ts", name: "savePeopleSettings" }, {})?.actions).toEqual(["update"]);
+  });
+  it("uses canonical Reporting ownership rather than Financial permissions", () => {
+    expect(financePermissionResource("retention-policies")).toBe("reporting-configuration");
+    expect(serverOperation({ filename: "src/lib/finance-config.functions.ts", name: "getFinanceConfiguration" }, { owner: "reporting-configuration" })?.resource).toBe("reporting-configuration");
+    expect(serverOperation({ filename: "src/lib/finance-config.functions.ts", name: "saveFinanceRule" }, { ruleKey: "retention-policies" })?.resource).toBe("reporting-configuration");
+  });
+  it("covers every authenticated function with a registered policy or explicit exemption", () => {
+    const directory = resolve("src/lib");
+    const missing: string[] = [];
+    let checked = 0;
+    for (const file of readdirSync(directory).filter((f) => f.endsWith(".functions.ts"))) {
+      const source = readFileSync(resolve(directory, file), "utf8");
+      for (const match of source.matchAll(/export const (\w+) = createServerFn/g)) {
+        const start = (match.index ?? 0) + match[0].length;
+        const handler = source.indexOf(".handler", start);
+        if (!source.slice(start, handler).includes("requireSupabaseAuth")) continue;
+        checked++;
+        const key = `${file.replace(".functions.ts", "")}:${match[1]}`;
+        if (!SERVER_OPERATIONS[key] && !OPERATION_EXEMPTIONS.has(key)) missing.push(key);
+      }
+    }
+    expect(checked).toBeGreaterThan(180);
+    expect(missing).toEqual([]);
   });
 });

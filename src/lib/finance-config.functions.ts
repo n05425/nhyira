@@ -95,14 +95,15 @@ export const getFinanceConfiguration = createServerFn({ method: "POST" })
 
     const failure = sections.error ?? items.error ?? rules.error;
     if (failure) throw new Error(failure.message);
+    const ownedKeys = new Set(FINANCE_AREAS.filter((a) => (a.owner ?? "financial-configuration") === data.owner).flatMap((a) => a.sections.map((s) => s.key)));
 
     return {
       schools: schools ?? [],
       schoolId,
-      sections: (sections.data ?? []).filter((r) => getSection(r.section_key)?.area.owner === data.owner || (!getSection(r.section_key)?.area.owner && data.owner === "financial-configuration")),
-      items: (items.data ?? []).filter((r) => (getSection(r.list_key)?.area.owner ?? "financial-configuration") === data.owner),
-      rules: (rules.data ?? []).filter((r) => (getSection(r.rule_key)?.area.owner ?? "financial-configuration") === data.owner),
-      audit: (auditRows.data ?? []).filter((r) => getSection(r.section_key) && (getSection(r.section_key)?.area.owner ?? "financial-configuration") === data.owner),
+      sections: (sections.data ?? []).filter((r) => ownedKeys.has(r.section_key)),
+      items: (items.data ?? []).filter((r) => ownedKeys.has(r.list_key)),
+      rules: (rules.data ?? []).filter((r) => ownedKeys.has(r.rule_key)),
+      audit: (auditRows.data ?? []).filter((r) => ownedKeys.has(r.section_key)),
     };
   });
 
