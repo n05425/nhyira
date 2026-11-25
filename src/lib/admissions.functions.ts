@@ -3,7 +3,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { assertAdmin, logAudit } from "@/lib/admin.server";
 import { resolveProvisionedSchool } from "@/lib/school.server";
-import { assertRoleOperations } from "@/lib/role-access.server";
+import { assertRecordRoleOperation } from "@/lib/role-access.server";
 import {
   admissionIdSchema,
   classTeacherSchema,
@@ -290,7 +290,7 @@ export const saveClassTeacher = createServerFn({ method: "POST" })
     const { data: existing, error: readError } = await context.supabase.from("class_teachers")
       .select("id").eq("class_name", data.className).maybeSingle();
     if (readError) throw new Error(readError.message);
-    await assertRoleOperations(context.supabase, context.userId, [{ resource: "admissions", actions: [existing ? "update" : "create"] }]);
+    await assertRecordRoleOperation(context.supabase, context.userId, "admissions:saveClassTeacher", data, { additions: existing ? 0 : 1, edits: existing ? 1 : 0 });
     const row = {
         class_name: data.className,
         teacher_name: data.teacherName,

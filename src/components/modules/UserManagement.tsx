@@ -47,6 +47,7 @@ import {
 } from "@/lib/admin.functions";
 import { ACCESS_LABEL, ROLES, ROLE_META, type Role } from "@/lib/access";
 import { useSession } from "@/hooks/useSession";
+import { useRoleAccess } from "@/hooks/useRoleAccess";
 import { passwordError } from "@/lib/password-policy";
 import { generateSecurePassword, STATUSES } from "@/lib/user-management";
 import { downloadRecordsCsv } from "@/lib/csv";
@@ -80,6 +81,7 @@ const REQUEST_STYLE: Record<string, string> = {
 };
 
 export function UserManagement() {
+  const access = useRoleAccess();
   const { profile } = useSession();
   const isSuperAdmin = profile?.role === "super_admin";
 
@@ -423,7 +425,7 @@ export function UserManagement() {
               >
                 <Download className="size-4" aria-hidden /> Export
               </Button>
-              <Button variant="outline" size="sm" onClick={() => fileRef.current?.click()}>
+              <Button variant="outline" size="sm" disabled={!access.allowsOperation("admin:bulkImportAccounts")} onClick={() => fileRef.current?.click()}>
                 <Upload className="size-4" aria-hidden /> Import CSV
               </Button>
               <input

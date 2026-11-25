@@ -1,3 +1,10 @@
+# Roadmap — Central permission engine
+
+- [x] Consolidate operation resolution and batch identity checks in the central authorization engine, preserving existing guards.
+- [x] Add independent Import grants and enforce Import plus actual writes on both insert-only import paths; their buttons reuse the server registry.
+- [x] Verify regression coverage, authenticated-function registry completeness and signed-out phone/desktop protection.
+- [ ] Verify saved role changes, assignments and imports while signed in — blocked: the externally configured sign-in has no available session in this sandbox; existing .env and backend connection are unchanged.
+
 # Roadmap — Import schdata archive modules
 
 - [x] Inspect archive modules for compliance with project rules (currency, CSV, print, config domains, branding, RLS/grants)

@@ -3,7 +3,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { assertPeriodOpen, loadRules } from "@/lib/academic-calendar.server";
 import { registerQuerySchema, saveAttendanceSchema } from "@/lib/attendance.schemas";
-import { assertRoleOperations } from "@/lib/role-access.server";
+import { assertRecordRoleOperation } from "@/lib/role-access.server";
 
 /**
  * Attendance is for administrators and for staff who carry class teacher
@@ -115,9 +115,7 @@ export const saveAttendance = createServerFn({ method: "POST" })
     const known = new Set((existing ?? []).map((e) => e.admission_id));
     const additions = data.entries.filter((e) => !known.has(e.admissionId));
     const edits = data.entries.filter((e) => known.has(e.admissionId));
-    await assertRoleOperations(context.supabase, context.userId, [{ resource: "attendance", actions: [
-      ...(additions.length ? ["create" as const] : []), ...(edits.length ? ["update" as const] : []),
-    ] }]);
+    await assertRecordRoleOperation(context.supabase, context.userId, "attendance:saveAttendance", data, { additions: additions.length, edits: edits.length });
     // Never let an Add-only request overwrite a row created concurrently by another user.
     if (additions.length) {
       const { error } = await context.supabase.from("student_attendance").insert(additions.map((e) => ({

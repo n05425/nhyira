@@ -48,12 +48,14 @@ import {
 } from "@/lib/finance";
 import { downloadRecordsCsv } from "@/lib/csv";
 import { useFinanceConfig } from "@/hooks/useFinanceConfig";
+import { useRoleAccess } from "@/hooks/useRoleAccess";
 
 type Overview = Awaited<ReturnType<typeof getFinancialOverview>>;
 
 const num = (v: unknown) => Number(v ?? 0);
 
 export function FinancialManagement() {
+  const access = useRoleAccess();
   const load = useServerFn(getFinancialOverview);
   const saveIncome = useServerFn(addIncome);
   const saveExpense = useServerFn(addExpense);
@@ -389,7 +391,7 @@ export function FinancialManagement() {
             } />
             <Button
               variant="outline"
-              disabled={busy}
+              disabled={busy || !access.allowsOperation("finance:importStaffPayroll")}
               onClick={() =>
                 void run(async () => {
                   const res = await importStaff();

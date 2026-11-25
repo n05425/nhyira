@@ -8,7 +8,7 @@ import { managedRoleSchema, defaultManagedRole, deleteManagedRole, operationAllo
 import { ACCESS_OPERATIONS } from "@/lib/role-governance";
 import { MODULES, ROLES, ROLE_META } from "@/lib/access";
 import { writeVersionedConfiguration } from "@/lib/configuration-writes";
-import { loadRoleAccess } from "@/lib/role-access.server";
+import { loadRoleAccess, assertRoleOperations } from "@/lib/role-access.server";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/integrations/supabase/types";
 
@@ -137,8 +137,6 @@ export const authorizeModuleExport = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((input: unknown) => z.object({ moduleId: z.string().refine((id) => MODULES.some((m) => m.id === id), "Unknown module") }).parse(input))
   .handler(async ({ data, context }) => {
-    const access = await loadRoleAccess(context.supabase, context.userId);
-    if (!operationAllowed(access.governance, context.userId, access.roles, access.level, data.moduleId, "export"))
-      throw new Error("Export permission is required to download or print this module's records.");
+    await assertRoleOperations(context.supabase, context.userId, [{ resource: data.moduleId, actions: ["export"] }], false);
     return { allowed: true };
   });

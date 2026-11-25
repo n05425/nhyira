@@ -5,8 +5,8 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { ACCESS_OPERATIONS, assertGrantDependencies, defaultManagedRole, deleteManagedRole, managedRoleSchema, operationAllowed, roleGovernanceSchema, setModuleGrant, type RoleGovernance } from "@/lib/role-governance";
 import { defaultPeopleRules, peopleRulesSchema } from "@/lib/people-rules";
 import { assertSuperAdmin } from "@/lib/admin.server";
-import { assertRoleOperations, assertServerRoleOperation } from "@/lib/role-access.server";
-import { financePermissionResource, OPERATION_EXEMPTIONS, SERVER_OPERATIONS, serverOperation } from "@/lib/role-operations";
+import { assertRecordRoleOperation, assertRoleOperations, assertServerRoleOperation } from "@/lib/role-access.server";
+import { financePermissionResource, OPERATION_EXEMPTIONS, SERVER_OPERATIONS, serverOperation, serverRequirements, recordSaveRequirements, projectedOperationAllowed } from "@/lib/role-operations";
 
 const userId = "00000000-0000-4000-8000-000000000001";
 const custom = { ...defaultManagedRole("staff"), id: "exam-reviewer", name: "Exam reviewer", grants: [{ resource: "assessment", action: "read" as const }] };
@@ -127,12 +127,12 @@ describe("server-side operation enforcement", () => {
   });
 });
 
-function permissionClient(governance: RoleGovernance) {
+function permissionClient(governance: RoleGovernance, role = "staff", level = "standard") {
   const client = {
     rpc: vi.fn().mockResolvedValue({ data: "school-a", error: null }),
     from: vi.fn((table: string) => {
-      const result = table === "user_roles" ? { data: [{ role: "staff" }], error: null }
-        : table === "profiles" ? { data: { access_level: "standard", status: "active" }, error: null }
+      const result = table === "user_roles" ? { data: [{ role }], error: null }
+        : table === "profiles" ? { data: { access_level: level, status: "active" }, error: null }
         : table === "schools" ? { data: { id: "school-a" }, error: null }
         : { data: { features: { __people_rules: { accessGovernance: governance } } }, error: null };
       const builder = { select: vi.fn(), eq: vi.fn(), maybeSingle: vi.fn().mockResolvedValue(result), then: (resolveValue: (value: unknown) => void) => Promise.resolve(result).then(resolveValue) };
@@ -143,7 +143,7 @@ function permissionClient(governance: RoleGovernance) {
   return client as unknown as SupabaseClient;
 }
 
-describe("five independent operation permissions", () => {
+describe("six independent operation permissions", () => {
   for (const action of ACCESS_OPERATIONS) {
     it(`granting ${action} never grants any other operation`, () => {
       const role = setModuleGrant({ ...custom, grants: [] }, "assessment", action, true);
@@ -194,8 +194,8 @@ describe("five independent operation permissions", () => {
       await expect(assertServerRoleOperation(client, userId, { filename: `src/lib/${stem}.functions.ts`, name: name ?? "" }, { syncToAssessment: true })).rejects.toThrow("create access to assessment");
     });
   }
-  it("classifies insert-only imports, submissions and groups as Add", () => {
-    for (const [stem, name] of [["admin", "bulkImportAccounts"], ["finance", "importStaffPayroll"], ["assignments", "submitAssignment"], ["assignments", "manageAssignmentGroups"]])
+  it("classifies insert-only submissions and groups as Add", () => {
+    for (const [stem, name] of [["assignments", "submitAssignment"], ["assignments", "manageAssignmentGroups"]])
       expect(serverOperation({ filename: `src/lib/${stem}.functions.ts`, name: name ?? "" }, {})?.actions).toEqual(["create"]);
   });
   it("editing singleton settings requires Edit, not Add", () => {
@@ -225,5 +225,92 @@ describe("five independent operation permissions", () => {
     }
     expect(checked).toBeGreaterThan(180);
     expect(missing).toEqual([]);
+  });
+});
+
+describe("central permission engine", () => {
+  it("enforces Import and Add together through the actual payroll import server policy", async () => {
+    const role = setModuleGrant({ ...defaultManagedRole("school_manager"), id: custom.id, grants: [] }, "financial-management", "create", true);
+    const meta = { filename: "finance.functions.ts", name: "importStaffPayroll" };
+    await expect(assertServerRoleOperation(permissionClient({ ...assigned, roles: [role] }, "school_manager", "administrator"), userId, meta, {})).rejects.toThrow("import access");
+    const importOnly = setModuleGrant(setModuleGrant(role, "financial-management", "import", true), "financial-management", "create", false);
+    await expect(assertServerRoleOperation(permissionClient({ ...assigned, roles: [importOnly] }, "school_manager", "administrator"), userId, meta, {})).rejects.toThrow("create access");
+    const both = setModuleGrant(role, "financial-management", "import", true);
+    await expect(assertServerRoleOperation(permissionClient({ ...assigned, roles: [both] }, "school_manager", "administrator"), userId, meta, {})).resolves.toBeUndefined();
+  });
+  it("UI import controls use the same requirements as the server, with no local grant policy", () => {
+    expect(projectedOperationAllowed([{ moduleId: "financial-management", actions: ["read", "create"] }], "finance:importStaffPayroll")).toBe(false);
+    expect(projectedOperationAllowed([{ moduleId: "financial-management", actions: ["read", "import"] }], "finance:importStaffPayroll")).toBe(false);
+    expect(projectedOperationAllowed([{ moduleId: "financial-management", actions: ["read", "create", "import"] }], "finance:importStaffPayroll")).toBe(true);
+    expect(projectedOperationAllowed([], "unknown:import")).toBe(false);
+  });
+  it("registers View, Add, Edit, Delete, Export and Import as distinct operations", () => {
+    expect(ACCESS_OPERATIONS).toEqual(["read", "create", "update", "delete", "export", "import"]);
+  });
+  for (const [stem, name, resource, baseRole, level] of [
+    ["admin", "bulkImportAccounts", "user-management", "school_manager", "administrator"],
+    ["finance", "importStaffPayroll", "financial-management", "school_manager", "administrator"],
+  ] as const) {
+    it(`${name} requires Import separately from Add`, async () => {
+      const role = setModuleGrant({ ...defaultManagedRole(baseRole), id: "importer", name: "Importer", grants: [] }, resource, "create", true);
+      const governance: RoleGovernance = { roles: [role], assignments: [{ userId, roleId: role.id }] };
+      expect(serverOperation({ filename: `${stem}.functions.ts`, name }, {})?.actions).toEqual(["import", "create"]);
+      expect(operationAllowed(governance, userId, [baseRole], level, resource, "import")).toBe(false);
+      governance.roles = [setModuleGrant(role, resource, "import", true)];
+      // User Management remains Super-Admin-only even if a custom role attempts to grant it.
+      expect(operationAllowed(governance, userId, [baseRole], level, resource, "import")).toBe(resource === "financial-management");
+      governance.roles = [setModuleGrant(governance.roles[0] ?? role, resource, "create", false)];
+      expect(operationAllowed(governance, userId, [baseRole], level, resource, "create")).toBe(false);
+    });
+  }
+  it("rejects a direct Import request when only Add is assigned", async () => {
+    const role = setModuleGrant(custom, "assessment", "create", true);
+    await expect(assertRoleOperations(permissionClient({ ...assigned, roles: [role] }), userId, [{ resource: "assessment", actions: ["import", "create"] }])).rejects.toThrow("import access");
+  });
+  it("Import does not authorize Export, Edit or Delete", () => {
+    const role = setModuleGrant(custom, "assessment", "import", true);
+    const governance = { ...assigned, roles: [role] };
+    for (const action of ["export", "update", "delete"] as const)
+      expect(operationAllowed(governance, userId, ["staff"], "standard", "assessment", action)).toBe(false);
+  });
+  it("older saved custom roles never implicitly gain Import", () => {
+    const governance = roleGovernanceSchema.parse(assigned);
+    expect(operationAllowed(governance, userId, ["staff"], "standard", "assessment", "import")).toBe(false);
+  });
+  it("clearing View removes Import and Export along with all writes", () => {
+    const role = setModuleGrant(defaultManagedRole("staff"), "assessment", "read", false);
+    for (const action of ACCESS_OPERATIONS)
+      expect(operationAllowed({ ...assigned, roles: [{ ...role, id: custom.id }] }, userId, ["staff"], "standard", "assessment", action)).toBe(false);
+  });
+  it("centrally resolves new-only, edit-only and mixed record saves", () => {
+    expect(recordSaveRequirements("attendance:saveAttendance", {}, { additions: 2, edits: 0 })).toEqual([{ resource: "attendance", actions: ["read", "create"] }]);
+    expect(recordSaveRequirements("attendance:saveAttendance", {}, { additions: 0, edits: 2 })[0]?.actions).toEqual(["read", "update"]);
+    expect(recordSaveRequirements("attendance:saveAttendance", {}, { additions: 1, edits: 1 })[0]?.actions).toEqual(["read", "create", "update"]);
+    expect(recordSaveRequirements("admissions:saveClassTeacher", {}, { additions: 0, edits: 1 })).toEqual([{ resource: "admissions", actions: ["read", "update"] }]);
+    expect(recordSaveRequirements("finance-config:saveFinanceSection", { sectionKey: "currency" }, { additions: 1, edits: 0 })[0]?.resource).toBe("financial-configuration");
+  });
+  it("central record-save enforcement rejects a mixed save for an Add-only account", async () => {
+    const role = setModuleGrant({ ...custom, grants: [] }, "attendance", "create", true);
+    await expect(assertRecordRoleOperation(permissionClient({ ...assigned, roles: [role] }), userId, "attendance:saveAttendance", {}, { additions: 1, edits: 1 })).rejects.toThrow("update access");
+  });
+  it("rejects unknown record-save policies and invalid facts", () => {
+    expect(() => recordSaveRequirements("unknown:save", {}, { additions: 1, edits: 0 })).toThrow("No registered");
+    expect(() => recordSaveRequirements("attendance:saveAttendance", {}, { additions: -1, edits: 0 })).toThrow("Invalid record-save");
+  });
+  it("cross-module requirements are resolved by the same registry", () => {
+    expect(serverRequirements({ filename: "assignments.functions.ts", name: "gradeSubmission" }, { syncToAssessment: true })).toEqual([
+      { resource: "assignments", actions: ["update"] }, { resource: "assessment", actions: ["create"] },
+    ]);
+  });
+  it("rejects unknown permission targets even for Super Admin", () => {
+    expect(operationAllowed(assigned, userId, ["super_admin"], "super_administrator", "missing-module", "import")).toBe(false);
+  });
+  it("validates requirements before the legacy-policy compatibility path", async () => {
+    await expect(assertRoleOperations(permissionClient({ roles: [], assignments: [] }), userId, [{ resource: "missing-module", actions: ["read"] }])).rejects.toThrow("invalid permission");
+  });
+  it("preserves legacy module guards while strict exports still check original module access", async () => {
+    const client = permissionClient({ roles: [], assignments: [] });
+    await expect(assertRoleOperations(client, userId, [{ resource: "assessment", actions: ["update"] }])).resolves.toBeUndefined();
+    await expect(assertRoleOperations(client, userId, [{ resource: "user-management", actions: ["export"] }], false)).rejects.toThrow("export access");
   });
 });

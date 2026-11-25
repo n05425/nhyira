@@ -2,9 +2,9 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { getRoles } from "@/lib/admin.server";
 import { readSchoolSettings } from "@/lib/school.server";
 import { PEOPLE_FEATURE_KEY } from "@/lib/people-rules";
-import { roleGovernanceSchema, operationAllowed, type AccessOperation } from "@/lib/role-governance";
-import { ACCESS_RANK, type AccessLevel } from "@/lib/access";
-import { financePermissionResource, operationKey, OPERATION_EXEMPTIONS, serverOperation } from "@/lib/role-operations";
+import { ACCESS_OPERATIONS, roleGovernanceSchema, operationAllowed } from "@/lib/role-governance";
+import { ACCESS_RANK, MODULES, type AccessLevel } from "@/lib/access";
+import { financePermissionResource, operationKey, OPERATION_EXEMPTIONS, serverRequirements, recordSaveRequirements, type OperationRequirement } from "@/lib/role-operations";
 
 export async function loadRoleAccess(supabase: SupabaseClient, userId: string) {
   const roles = await getRoles(supabase, userId);
@@ -26,7 +26,8 @@ export async function assertServerRoleOperation(
   supabase: SupabaseClient, userId: string,
   meta: { name: string; filename: string }, data: unknown,
 ) {
-  const operation = serverOperation(meta, data);
+  const requirements = serverRequirements(meta, data);
+  const operation = requirements[0];
   if (!operation) {
     const key = operationKey(meta);
     if (key && OPERATION_EXEMPTIONS.has(key)) return;
@@ -46,19 +47,28 @@ export async function assertServerRoleOperation(
     if (error || typeof sectionKey !== "string") throw new Error("Configuration record not found.");
     operation.resource = financePermissionResource(sectionKey);
   }
-  const requirements = [operation];
-  if ((["assignments:gradeSubmission", "assignments:reviewRegradeRequest"].includes(operationKey(meta) ?? "") && input['syncToAssessment'] === true) || operationKey(meta) === "exams:syncExamToAssessment")
-    requirements.push({ resource: "assessment", actions: ["create"] });
   await assertRoleOperations(supabase, userId, requirements);
+}
+
+/** Modules provide only trusted row counts, never duplicate resource/action decisions. */
+export async function assertRecordRoleOperation(
+  supabase: SupabaseClient, userId: string, key: string, data: unknown,
+  facts: { additions: number; edits: number },
+) {
+  await assertRoleOperations(supabase, userId, recordSaveRequirements(key, data, facts));
 }
 
 export async function assertRoleOperations(
   supabase: SupabaseClient, userId: string,
-  requirements: { resource: string; actions: AccessOperation[] }[],
+  requirements: OperationRequirement[],
+  preserveLegacyGuards = true,
 ) {
+  if (!requirements.length || requirements.some((r) => !MODULES.some((m) => m.id === r.resource) ||
+    !r.actions.length || r.actions.some((a) => !ACCESS_OPERATIONS.includes(a))))
+    throw new Error("Forbidden: invalid permission requirement.");
   const access = await loadRoleAccess(supabase, userId);
   // No override/assignment means the existing server guards remain exactly as before.
-  if (!access.governance.roles.length && !access.governance.assignments.length) return;
+  if (preserveLegacyGuards && !access.governance.roles.length && !access.governance.assignments.length) return;
   for (const operation of requirements) {
     for (const action of operation.actions) {
       if (!operationAllowed(access.governance, userId, access.roles, access.level, operation.resource, action))

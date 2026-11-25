@@ -34,3 +34,4 @@
 - Operations rules include a publicity section (notice retention, banner slides); new sections must be added with a schema .default([]) so older saved payloads still parse.
 - Tenant feature saves use configuration-writes.ts and the invoker RPCs write_school_configuration/write_school_module_policy; school-row locks serialize first writes and domain merging so concurrent saves cannot overwrite unrelated rules.
 - Protected roles are read only through getRoles in admin.server.ts, never profiles.role; teaching scope preserves learner/guardian roles and fails closed on failed assignment reads.
+- Use role-operations.ts for module policy to prevent duplicated rules.

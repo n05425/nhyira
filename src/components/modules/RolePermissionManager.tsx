@@ -134,7 +134,7 @@ export function RolePermissionManager() {
         <section className="space-y-3">
           <div className="flex flex-wrap items-center justify-between gap-3"><h3 className="font-semibold">Allowed operations</h3><Input className="w-full sm:w-60" aria-label="Filter permission modules" placeholder="Find module…" value={filter} onChange={(e) => setFilter(e.target.value)} /></div>
           <div className="overflow-x-auto rounded-md border border-border">
-            <Table className="min-w-[580px]"><TableHeader><TableRow><TableHead className="min-w-48">Module</TableHead>
+            <Table className="min-w-[650px]"><TableHeader><TableRow><TableHead className="min-w-48">Module</TableHead>
               {ACCESS_OPERATIONS.map((op) => <TableHead key={op} className="w-16 text-center">{OPERATION_LABEL[op]}</TableHead>)}
             </TableRow></TableHeader><TableBody>{visibleModules.map((m) => <TableRow key={m.id}>
               <TableCell><span className="block font-medium">{m.name}</span><span className="text-xs text-muted-foreground">{m.category}</span></TableCell>
@@ -142,7 +142,7 @@ export function RolePermissionManager() {
                 checked={draft.grants.some((g) => g.resource === m.id && g.action === op)} onCheckedChange={(checked) => {
                   changeDraft(setModuleGrant(draft, m.id, op, checked === true));
                 }} /></TableCell>)}
-            </TableRow>)}{!visibleModules.length && <TableRow><TableCell colSpan={6} className="text-center text-muted-foreground">No matching modules.</TableCell></TableRow>}</TableBody></Table>
+            </TableRow>)}{!visibleModules.length && <TableRow><TableCell colSpan={ACCESS_OPERATIONS.length + 1} className="text-center text-muted-foreground">No matching modules.</TableCell></TableRow>}</TableBody></Table>
           </div>
         </section>
 

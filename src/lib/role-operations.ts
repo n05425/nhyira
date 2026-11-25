@@ -10,7 +10,7 @@ export const SERVER_OPERATIONS: Record<string, { resource: string; actions: Acce
   "admin:updateAccount": { resource: "user-management", actions: ["update"] },
   "admin:setAccountStatus": { resource: "user-management", actions: ["update"] },
   "admin:deleteAccount": { resource: "user-management", actions: ["delete"] },
-  "admin:bulkImportAccounts": { resource: "user-management", actions: ["create"] },
+  "admin:bulkImportAccounts": { resource: "user-management", actions: ["import", "create"] },
   "admin:adminResetPassword": { resource: "user-management", actions: ["update"] },
   "admin:listResetRequests": { resource: "user-management", actions: ["read"] },
   "admin:resolveResetRequest": { resource: "user-management", actions: ["update"] },
@@ -67,7 +67,7 @@ export const SERVER_OPERATIONS: Record<string, { resource: string; actions: Acce
   "finance:addIncome": { resource: "financial-management", actions: ["create"] },
   "finance:addExpense": { resource: "financial-management", actions: ["create"] },
   "finance:addPayrollEntry": { resource: "financial-management", actions: ["create"] },
-  "finance:importStaffPayroll": { resource: "financial-management", actions: ["create"] },
+  "finance:importStaffPayroll": { resource: "financial-management", actions: ["import", "create"] },
   "finance:processPayroll": { resource: "financial-management", actions: ["update"] },
   "finance:addStudentFee": { resource: "financial-management", actions: ["create"] },
   "finance:updateStudentFee": { resource: "financial-management", actions: ["update"] },
@@ -233,4 +233,50 @@ export function serverOperation(meta: { filename: string; name: string }, data: 
   const idEditors = new Set(["saveAssessment", "saveFinanceRule", "saveExam", "saveAssignment", "saveLesson", "saveLibraryBook", "saveTimetableSlot", "saveFinanceItem", "upsertAnnouncement", "upsertPublicityNotice", "upsertPublicityCircular", "upsertPublicityBanner", "upsertPublicityArticle", "upsertPublicityMediaGallery"]);
   if (idEditors.has(meta.name)) return { ...operation, actions: [input['id'] ? "update" : "create"] as AccessOperation[] };
   return operation;
+}
+
+export type OperationRequirement = { resource: string; actions: AccessOperation[] };
+
+/** UI controls reuse the server registry; the projection is never proof of authorization. */
+export function requirementsForOperation(key: string, data: unknown = {}): OperationRequirement[] {
+  const [stem, name, extra] = key.split(":");
+  if (!stem || !name || extra) return [];
+  return serverRequirements({ filename: `${stem}.functions.ts`, name }, data);
+}
+
+export function projectedOperationAllowed(
+  projection: readonly { moduleId: string; actions: readonly AccessOperation[] }[], key: string, data: unknown = {},
+): boolean {
+  try {
+    const requirements = requirementsForOperation(key, data);
+    return requirements.length > 0 && requirements.every((r) => r.actions.every((action) =>
+      projection.some((p) => p.moduleId === r.resource && p.actions.includes(action))));
+  } catch { return false; }
+}
+
+/** Every cross-module side effect is registered here, never in a module's permission code. */
+export function serverRequirements(meta: { filename: string; name: string }, data: unknown): OperationRequirement[] {
+  const operation = serverOperation(meta, data);
+  if (!operation) return [];
+  const input = data && typeof data === "object" ? data as Record<string, unknown> : {};
+  const key = operationKey(meta);
+  const requirements = [operation];
+  if ((["assignments:gradeSubmission", "assignments:reviewRegradeRequest"].includes(key ?? "") && input['syncToAssessment'] === true) || key === "exams:syncExamToAssessment")
+    requirements.push({ resource: "assessment", actions: ["create"] });
+  return requirements;
+}
+
+/** Trusted record facts are supplied after the handler reads its rows; permission policy stays here. */
+export function recordSaveRequirements(
+  key: string, data: unknown, facts: { additions: number; edits: number },
+): OperationRequirement[] {
+  if (!["attendance:saveAttendance", "admissions:saveClassTeacher", "finance-config:saveFinanceSection"].includes(key))
+    throw new Error("No registered record-save permission policy.");
+  if (!Number.isInteger(facts.additions) || !Number.isInteger(facts.edits) || facts.additions < 0 || facts.edits < 0)
+    throw new Error("Invalid record-save facts.");
+  const [stem, name] = key.split(":");
+  if (!stem || !name) throw new Error("Invalid record-save policy.");
+  const operation = serverOperation({ filename: `${stem}.functions.ts`, name }, data);
+  if (!operation) throw new Error("No registered record-save permission policy.");
+  return [{ resource: operation.resource, actions: ["read", ...(facts.additions ? ["create" as const] : []), ...(facts.edits ? ["update" as const] : [])] }];
 }

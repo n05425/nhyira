@@ -1,7 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
-import { assertRoleOperations } from "@/lib/role-access.server";
-import { financePermissionResource } from "@/lib/role-operations";
+import { assertRecordRoleOperation } from "@/lib/role-access.server";
 import { resolveProvisionedSchool } from "@/lib/school.server";
 import type { Json } from "@/integrations/supabase/types";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
@@ -187,7 +186,7 @@ export const saveFinanceSection = createServerFn({ method: "POST" })
 
     const draft = (existing ?? []).find((r: any) => r.status === "draft");
     const nextVersion = ((existing ?? [])[0]?.version ?? 0) + 1;
-    await assertRoleOperations(supabase, context.userId, [{ resource: financePermissionResource(data.sectionKey), actions: [draft && !data.newVersion ? "update" : "create"] }]);
+    await assertRecordRoleOperation(supabase, context.userId, "finance-config:saveFinanceSection", data, { additions: draft && !data.newVersion ? 0 : 1, edits: draft && !data.newVersion ? 1 : 0 });
 
     if (draft && !data.newVersion) {
       const { error } = await supabase

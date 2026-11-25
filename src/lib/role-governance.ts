@@ -1,10 +1,10 @@
 import { z } from "zod";
 import { MODULES, ROLES, ROLE_META, canAccess, type Role, type AccessLevel } from "@/lib/access";
 
-export const ACCESS_OPERATIONS = ["read", "create", "update", "delete", "export"] as const;
+export const ACCESS_OPERATIONS = ["read", "create", "update", "delete", "export", "import"] as const;
 export type AccessOperation = (typeof ACCESS_OPERATIONS)[number];
 export const OPERATION_LABELS: Record<AccessOperation, string> = {
-  read: "View", create: "Add", update: "Edit", delete: "Delete", export: "Export",
+  read: "View", create: "Add", update: "Edit", delete: "Delete", export: "Export", import: "Import",
 };
 export const grantSchema = z.object({
   resource: z.string().refine((id) => MODULES.some((m) => m.id === id), "Unknown module"),
@@ -64,6 +64,7 @@ export function operationAllowed(
   governance: RoleGovernance, userId: string, roles: string[], level: AccessLevel,
   resource: string, action: AccessOperation,
 ): boolean {
+  if (!MODULES.some((m) => m.id === resource) || !ACCESS_OPERATIONS.includes(action)) return false;
   if (roles.includes("super_admin")) return true;
   const eligible = roles.filter((r): r is Role => ROLES.includes(r as Role) && canAccess(r as Role, level, resource));
   if (!eligible.length) return false;
