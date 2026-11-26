@@ -1,5 +1,8 @@
 # Roadmap — Central permission engine
 
+- [ ] Apply one shared permission-aware button mechanism across all modules, including dialogs and imports/exports.
+- [ ] Test View-only, View/Add/Edit and View/Add/Edit/Delete controls against the central policy and verify available browser flows.
+
 - [x] Consolidate operation resolution and batch identity checks in the central authorization engine, preserving existing guards.
 - [x] Add independent Import grants and enforce Import plus actual writes on both insert-only import paths; their buttons reuse the server registry.
 - [x] Verify regression coverage, authenticated-function registry completeness and signed-out phone/desktop protection.

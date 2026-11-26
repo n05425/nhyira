@@ -36,6 +36,7 @@ import { MessagingManagement } from "@/components/modules/MessagingManagement";
 import { TimetableManagement } from "@/components/modules/TimetableManagement";
 import { PerformanceTrackerManagement } from "@/components/modules/PerformanceTrackerManagement";
 import { useRoleAccess } from "@/hooks/useRoleAccess";
+import { ModulePermissions } from "@/components/portal/ModulePermissions";
 
 
 export const Route = createFileRoute("/_authenticated/portal/$moduleId")({
@@ -113,6 +114,7 @@ function ModulePage() {
         </div>
       </header>
 
+      <ModulePermissions key={mod.id} moduleId={mod.id} projection={roleAccess.data?.operations ?? []}>
       {mod.id === "performance-tracker" ? (
         <PerformanceTrackerManagement />
       ) : mod.id === "fees-invoicing" ? (
@@ -194,6 +196,7 @@ function ModulePage() {
           </dl>
         </Panel>
       )}
+      </ModulePermissions>
     </div>
   );
 }
